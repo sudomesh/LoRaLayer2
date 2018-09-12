@@ -10,9 +10,10 @@ int setup() {
 
 
 int loop() {
+  //  Serial.printf("--- looping\n");
 
-  Serial.printf("--- looping\n");
-  sleep(2);
+  // see README.md for explanation of nsleep
+  nsleep(2, 0);
 }
 
 

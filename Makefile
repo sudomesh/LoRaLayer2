@@ -2,10 +2,10 @@
 
 all: ping_example firmware
 
-ping_example: ping_example.c base.c
+ping_example: ping_example.c base.c base.h
 	gcc -o ping_example ping_example.c base.c
 
-firmware: firmware.c base.c
+firmware: firmware.c base.c base.h
 	gcc -o firmware firmware.c base.c
 
 clean:

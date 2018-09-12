@@ -1,3 +1,4 @@
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -10,6 +11,38 @@
 #include <string.h>
 #include "base.h"
 
+struct timeval to_sleep;
+
+// from https://www.gnu.org/software/libc/manual/html_node/Elapsed-Time.html
+int timeval_subtract(struct timeval *result, struct timeval *x, struct timeval *y) {
+  /* Perform the carry for the later subtraction by updating y. */
+  if (x->tv_usec < y->tv_usec) {
+    int nsec = (y->tv_usec - x->tv_usec) / 1000000 + 1;
+    y->tv_usec -= 1000000 * nsec;
+    y->tv_sec += nsec;
+  }
+  if (x->tv_usec - y->tv_usec > 1000000) {
+    int nsec = (x->tv_usec - y->tv_usec) / 1000000;
+    y->tv_usec += 1000000 * nsec;
+    y->tv_sec -= nsec;
+  }
+
+  /* Compute the time remaining to wait.
+     tv_usec is certainly positive. */
+  result->tv_sec = x->tv_sec - y->tv_sec;
+  result->tv_usec = x->tv_usec - y->tv_usec;
+
+  /* Return 1 if result is negative. */
+  return x->tv_sec < y->tv_sec;
+}
+
+int nsleep(unsigned int secs, useconds_t usecs) {
+
+  to_sleep.tv_sec = secs;
+  to_sleep.tv_usec = usecs;
+  
+  return 0;
+}
 
 
 int print_err(const char* format, ...) {
@@ -19,11 +52,13 @@ int print_err(const char* format, ...) {
   va_start(args, format);
   ret = vfprintf(stderr, format, args);
   va_end(args);
+  fflush(stderr);
   return ret;
 }
 
-int send_packet(char* data, size_t len) {
-
+int send_packet(char* data, uint8_t len) {
+  
+  char packet[258];
   ssize_t written = 0;
   ssize_t ret;
 
@@ -36,20 +71,18 @@ int send_packet(char* data, size_t len) {
     return -1;
   }
 
-  while(ret < 1) {
-    ret = write(STDOUT, (void*) &len, 1);
-    if(ret < 0) {
-      return ret;
-    }
-  }
+  packet[0] = len;
+  memcpy(packet+1, data, len);
+
   while(written < len) {
-    ret = write(STDOUT, (void*) data, len);
+    ret = write(STDOUT, (void*) packet, len+1);
     if(ret < 0) {
       return ret;
     }
     written += ret;
   }
-
+  
+  fflush(stdout);
   return 0;
 }
 
@@ -63,7 +96,9 @@ int main(int argc, char **argv) {
   ssize_t len = 0;
   ssize_t got;
 
-  Serial.printf = &printf;
+  nsleep(0, 0);
+
+  Serial.printf = &print_err;
 
   flags = fcntl(STDIN, F_GETFL, 0);
   if(flags == -1) {
@@ -85,15 +120,28 @@ int main(int argc, char **argv) {
     FD_ZERO(&fds);
     FD_SET(STDIN, &fds);
 
-    tv.tv_sec = 0;
-    tv.tv_usec = 0;
-
+    tv.tv_sec = to_sleep.tv_sec;
+    tv.tv_usec = to_sleep.tv_usec;
+    
     ret = select(STDIN + 1, &fds, NULL, NULL, &tv);
     if(ret < 0) {
       perror("select() failed");
       return 1;
-    } else if(ret && FD_ISSET(STDIN, &fds)) {
+    }
 
+    // WARNING this code assumes that tv is modified to reflect the
+    // time not slept during select()
+    // which is only true on Linux
+    if(tv.tv_sec < 1 && tv.tv_usec < 100) {
+      // getting within 100 us is enough.
+      to_sleep.tv_sec = 0;
+      to_sleep.tv_usec = 0;
+    } else {
+      to_sleep.tv_sec = tv.tv_sec;
+      to_sleep.tv_usec = tv.tv_usec;
+    }
+
+    if(ret && FD_ISSET(STDIN, &fds)) {
       if(!len) {
         // receive the length of the incoming packet
         ret = read(STDIN, &len, 1);
@@ -101,7 +149,6 @@ int main(int argc, char **argv) {
           perror("receiving length of incoming packet failed");
           return 1;
         }
-        len += 1;
 
         got = 0;
       }
@@ -127,8 +174,12 @@ int main(int argc, char **argv) {
       }
       len = 0;
     }
-    if(ret = loop()) {
-      return ret;
+
+    // if we've slept enough, call loop()
+    if(to_sleep.tv_sec == 0 && to_sleep.tv_usec == 0) {
+      if(ret = loop()) {
+        return ret;
+      }
     }
   }
 

@@ -1,4 +1,7 @@
 
+#include <unistd.h>
+#include <stdint.h>
+
 #define STDIN 0
 #define STDOUT 1
 
@@ -10,8 +13,9 @@ struct serial Serial;
 
 int print_err(const char* format, ...);
 
-int send_packet(char* data, size_t len);
+int send_packet(char* data, uint8_t len);
 
+int nsleep(unsigned int secs, useconds_t usecs);
 
 // you must declare these in your router
 int setup(); // called once on startup
