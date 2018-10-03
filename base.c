@@ -81,7 +81,7 @@ int send_packet(char* data, uint8_t len) {
     }
     written += ret;
   }
-  
+  printf("\n");
   fflush(stdout);
   return 0;
 }
