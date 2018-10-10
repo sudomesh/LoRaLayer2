@@ -10,36 +10,34 @@
 #define SHA1_LENGTH 40
 #define ADDR_LENGTH 6 
 
+uint8_t mac[ADDR_LENGTH];
+char macaddr[ADDR_LENGTH*2];
+
+// global sequence number
+uint8_t messageCount = 0;
+
+// mode switches
 int retransmitEnabled = 0;
 int pollingEnabled = 0;
 int beaconModeEnabled = 1;
 int hashingEnabled = 1;
-
-int bufferInterval = 5; // check buffer every 10 secs
-
-int beaconInterval = 15;
-uint8_t beaconCount = 0;
 int beaconModeReached = 0;
 
-uint8_t hashTable[256][SHA1_LENGTH];
-uint8_t hashEntry = 0;
+// timeout intervals
+int bufferInterval = 5;
+int helloInterval = 10;
+int routeInterval = 25;
 
-struct Buffer {
-    uint8_t message[256]; 
-    uint8_t length;
-};
+// metric variables
+float packetSuccessWeight = .4;
+float RSSIWeight = .3;
+float SNRWeight = .3;
 
-struct Buffer messageBuffer[8];
-int bufferEntry = 0;
-
-uint8_t mac[ADDR_LENGTH];
-uint8_t macaddr[13];
-
+// packet structures
 struct Metadata {
     uint8_t rssi;
     uint8_t snr;
 };
-
 struct Packet {
     uint8_t ttl;
     uint8_t totalLength;
@@ -50,6 +48,17 @@ struct Packet {
     uint8_t data[239];
 };
 
+// table structures
+uint8_t hashTable[256][SHA1_LENGTH];
+uint8_t hashEntry = 0;
+
+struct BufferEntry {
+    uint8_t message[256]; 
+    uint8_t length;
+};
+struct BufferEntry messageBuffer[8];
+int bufferEntry = 0;
+
 struct neighborTableEntry{
     uint8_t address[ADDR_LENGTH];
     uint8_t lastReceived;
@@ -57,7 +66,7 @@ struct neighborTableEntry{
     uint8_t metric;
 };
 struct neighborTableEntry neighborTable[255];
-int neighborEntry = 0;
+int neighborEntry = 1;
 
 struct routeTableEntry{
     uint8_t destination[ADDR_LENGTH];
@@ -66,13 +75,8 @@ struct routeTableEntry{
     uint8_t lastReceived;
     uint8_t metric;
 };
-
 struct routeTableEntry routeTable[255];
 int routeEntry = 0;
-
-uint8_t packetSuccessWeight = 1/3;
-uint8_t RSSIWeight = 1/3;
-uint8_t SNRWeight = 1/3;
 
 int isHashNew(uint8_t hash[SHA1_LENGTH]){
 
@@ -96,20 +100,30 @@ int isHashNew(uint8_t hash[SHA1_LENGTH]){
     return hashNew;
 }
 
-void addToBuffer(uint8_t message[256], int length){
+void pushToBuffer(uint8_t message[256], int length){
 
     if(bufferEntry > 7){
         bufferEntry = 0;
     }
-    Serial.printf("Adding message to buffer");
-    Serial.printf("\r\n");
-
     messageBuffer[bufferEntry].length = length;
     for( int i = 0 ; i < length ; i++){
         messageBuffer[bufferEntry].message[i] = message[i];    
     }
-
     bufferEntry++;
+}
+
+struct BufferEntry popFromBuffer(){
+
+    bufferEntry--;
+    struct BufferEntry pop;
+    pop.length = messageBuffer[bufferEntry].length;
+    uint8_t* popMessage = malloc(pop.length);
+    for( int i = 0 ; i < pop.length ; i++){
+        popMessage[i] = messageBuffer[bufferEntry].message[i];
+        messageBuffer[bufferEntry].message[i] = 0;
+    }
+    memcpy(&pop.message, popMessage, pop.length);
+    return pop; 
 }
 
 void printNeighborTable(){
@@ -118,6 +132,7 @@ void printNeighborTable(){
         for(int j = 0 ; j < ADDR_LENGTH ; j++){
             Serial.printf("%x", neighborTable[i].address[j]);
         }
+        Serial.printf(" %3d ", neighborTable[i].metric);
         Serial.printf("\n");
     }
 }
@@ -160,22 +175,28 @@ uint8_t calculatePacketLoss(int entry, uint8_t sequence){
 
 uint8_t calculateMetric(int entry, uint8_t sequence, struct Metadata metadata){
 
-    uint8_t packet_loss = calculatePacketLoss(entry, sequence);
-    neighborTable[entry].packet_success = neighborTable[entry].packet_success - packet_loss; 
-    uint8_t weightedPacketSuccess =  neighborTable[entry].packet_success * packetSuccessWeight;
-    uint8_t weightedRSSI =  metadata.rssi * RSSIWeight;
-    uint8_t weightedSNR =  metadata.snr * SNRWeight;
-    neighborTable[entry].metric = weightedPacketSuccess + weightedRSSI + weightedSNR;
-    Serial.printf("metric calculated: %x\n", neighborTable[entry].metric);
+    float weightedPacketSuccess =  ((float) neighborTable[entry].packet_success)*packetSuccessWeight;
+    float weightedRSSI =  ((float) metadata.rssi)*RSSIWeight;
+    float weightedSNR =  ((float) metadata.snr)*SNRWeight;
+    uint8_t metric = weightedPacketSuccess+weightedRSSI+weightedSNR;
+    Serial.printf("weighted packet success: %3f\n", weightedPacketSuccess);
+    Serial.printf("weighted RSSI: %3f\n", weightedRSSI);
+    Serial.printf("weighted SNR: %3f\n", weightedSNR);
+    Serial.printf("metric calculated: %3d\n", metric);
+    return metric;
 }
 
 void addNeighbor(struct Packet packet, struct Metadata metadata){
 
-    Serial.printf("New neighbor found\n");
+    Serial.printf("New neighbor found: ");
     for( int i = 0 ; i < ADDR_LENGTH; i++){
         neighborTable[neighborEntry].address[i] = packet.source[i];
+        Serial.printf("%02x", neighborTable[neighborEntry].address[i]);
     }
+    Serial.printf("\n");
     neighborTable[neighborEntry].lastReceived = packet.sequence;
+    uint8_t packet_loss = calculatePacketLoss(neighborEntry, packet.sequence);
+    neighborTable[neighborEntry].packet_success = neighborTable[neighborEntry].packet_success - packet_loss;
     uint8_t metric = calculateMetric(neighborEntry, packet.sequence, metadata); 
     neighborTable[neighborEntry].metric = metric;
     neighborEntry++;
@@ -202,7 +223,7 @@ void printPacketInfo(struct Packet packet, struct Metadata metadata){
     Serial.printf("type: %c\n", packet.type);
     Serial.printf("data: ");
     for(int i = 0 ; i < packet.totalLength-HEADER_LENGTH ; i++){
-        Serial.printf("%c", packet.data[i]);
+        Serial.printf("%02x", packet.data[i]);
     }
     Serial.printf("\n");
 }
@@ -242,6 +263,9 @@ int packet_received(char* data, size_t len) {
                 addNeighbor(packet, metadata);  
             } 
             break;
+        case 'r':
+            Serial.printf("this is a routing packet\n");
+            break;
         case 'c' :
             Serial.printf("this is a chat message\n");
             break;
@@ -251,7 +275,7 @@ int packet_received(char* data, size_t len) {
         default :
             Serial.printf("message type not found\n");
     }
-    addToBuffer(data, len);
+    pushToBuffer(data, len);
 
     return 0;
 }
@@ -292,64 +316,109 @@ void checkBuffer(){
 
     if (time(NULL) - lastCheckTime > bufferInterval) {
         if (bufferEntry > 0){
-            /* Uncomment if you want race condition to determine a single beacon
+            // Uncomment if you want race condition to determine a single beacon node
             if(!beaconModeReached){
                 beaconModeEnabled = 0;
             }
-            */
-            int transmitLength = messageBuffer[bufferEntry-1].length;
-            uint8_t *transmit = malloc(transmitLength);
-            Serial.printf("Removing packet from buffer\n");
-            for( int i = 0 ; i < transmitLength ; i++){
-                transmit[i] = messageBuffer[bufferEntry-1].message[i];
-                messageBuffer[bufferEntry-1].message[i] = 0;
-            }
+
+            struct BufferEntry transmit = popFromBuffer();
+
             if(retransmitEnabled){
-                sendMessage(transmit, transmitLength);
+                sendMessage(transmit.message, transmit.length);
             }
-            bufferEntry--;
         }else{
-            Serial.printf("Buffer is empty");
-            Serial.printf("\r\n");
+            Serial.printf("Buffer is empty\n");
         }
         lastCheckTime = time(NULL);
     }
 }
 
-long lastBeaconTime = 0;
-void transmitBeacon(){
+struct Packet buildPacket( uint8_t ttl, uint8_t dest[6], uint8_t type, uint8_t* data, uint8_t data_length){
 
-    if (time(NULL) - lastBeaconTime > beaconInterval) {
+    uint8_t packetLength = HEADER_LENGTH + data_length;
+    struct Packet packet = {
+        ttl,
+        packetLength,
+        mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],
+        dest[0], dest[1], dest[2], dest[3], dest[4], dest[5],
+        messageCount,
+        type 
+    };
+
+    memcpy(&packet.data, data, packet.totalLength);
+    return packet;
+}
+
+long lastHelloTime = 0;
+void transmitHello(){
+
+    if (time(NULL) - lastHelloTime > helloInterval) {
         beaconModeReached = 1; 
-        int messageLength = 22;
         char buf[256];
         char message[10] = "Hola from\0";
         sprintf(buf, "%s %s", message, macaddr);
+        int messageLength = 22;
         uint8_t* byteMessage = malloc(messageLength);
         byteMessage = ( uint8_t* ) buf;
-        uint8_t packetLength = HEADER_LENGTH + messageLength;
-        struct Packet testMessage = {
-            32,
-            packetLength,
-            mac[5], mac[4], mac[3], mac[2], mac[1], mac[0],
-            0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-            beaconCount,
-            'h'
-        };
+        //TODO: add randomness to message to avoid hashisng issues
+        uint8_t destination[6] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
+        struct Packet helloMessage = buildPacket(32, destination, 'h', byteMessage, messageLength); 
 
-        memcpy(&testMessage.data, byteMessage, testMessage.totalLength);
-
-        uint8_t* sending = malloc(packetLength);
-        sending = &testMessage;
+        uint8_t* sending = malloc(helloMessage.totalLength);
+        sending = &helloMessage;
 
         Serial.printf("Sending beacon: ");
-        for(int i = 0 ; i < packetLength ; i++){
+        for(int i = 0 ; i < helloMessage.totalLength ; i++){
             Serial.printf("%02x", sending[i]);
         }
         Serial.printf("\r\n");
-        send_packet(sending, packetLength);
-        beaconCount++;
-        lastBeaconTime = time(NULL);
+        send_packet(sending, helloMessage.totalLength);
+        messageCount++;
+        lastHelloTime = time(NULL);
+    }
+}
+
+
+long lastRouteTime = 0;
+void transmitRoutes(){
+
+    if (time(NULL) - lastRouteTime > routeInterval) {
+        uint8_t data[239];
+        int dataLength = 0;
+
+        for( int i = 0 ; i < ADDR_LENGTH ; i++ ){
+            data[dataLength] = mac[i];
+            dataLength++;
+        }
+        // append routes from neighbor table
+        for( int i = 0 ; i < neighborEntry ; i++){
+            for( int j = 0 ; j < ADDR_LENGTH ; j++){
+                data[dataLength] = neighborTable[i].address[j];
+                dataLength++;
+            }
+        }
+
+        Serial.printf("routing message: ");
+        for(int i = 0 ; i < dataLength ; i++){
+            Serial.printf("%02x", data[i]);
+        }
+        Serial.printf("\r\n");
+
+        uint8_t destination[6] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
+        struct Packet routeMessage = buildPacket(32, destination, 'r', data, dataLength); 
+        uint8_t* sending = malloc(routeMessage.totalLength);
+        sending = &routeMessage;
+
+        //Serial.printf("Sending routes: ");
+        //for(int i = 0 ; i < routeMessage.totalLength ; i++){
+        //    Serial.printf("%02x", sending[i]);
+        //}
+        //Serial.printf("\r\n");
+        
+        send_packet(sending, routeMessage.totalLength);
+        messageCount++;
+        
+        lastRouteTime = time(NULL);
     }
 }
 
@@ -363,9 +432,31 @@ void wifiSetup(){
     }
 
     // MAC address comes in backwards on ESP8266
-    sprintf(macaddr, "%02x%02x%02x%02x%02x%02x\0", mac[5], mac[4], mac[3], mac[2], mac[1], mac [0]);
+    // reverse mac array
+    Serial.printf("%02x%02x%02x%02x%02x%02x\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac [5]);
+    uint8_t tmp;
+    int start = 0;
+    int end = ADDR_LENGTH-1;
+    while (start < end) 
+    { 
+        tmp = mac[start];    
+        mac[start] = mac[end]; 
+        mac[end] = tmp; 
+        start++; 
+        end--; 
+    }    
+    Serial.printf("%02x%02x%02x%02x%02x%02x\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac [5]);
+
+    sprintf(macaddr, "%02x%02x%02x%02x%02x%02x\0", mac[0], mac[1], mac[2], mac[3], mac[4], mac [5]);
 
     Serial.printf("%s\n", macaddr);
+
+    for( int i = 0 ; i < ADDR_LENGTH ; i++){
+        neighborTable[0].address[i] = 0xaa;
+    }
+    neighborTable[0].metric = 10; 
+    neighborTable[0].packet_success = 10; 
+    neighborTable[0].lastReceived = 10; 
 
     //strcat(ssid, macaddr);
     //WiFi.hostname(hostName);
@@ -401,7 +492,10 @@ int loop() {
         checkBuffer(); 
 
         if (beaconModeEnabled){
-            transmitBeacon();
+            transmitHello();
+        }
+        if (neighborEntry > 0){
+            transmitRoutes();
         }
     //}
     nsleep(1, 0);
