@@ -45,7 +45,7 @@ struct Packet {
     uint8_t destination[ADDR_LENGTH];
     uint8_t sequence;
     uint8_t type;
-    uint8_t data[239];
+    uint8_t data[240];
 };
 
 // table structures
@@ -59,23 +59,23 @@ struct BufferEntry {
 struct BufferEntry messageBuffer[8];
 int bufferEntry = 0;
 
-struct neighborTableEntry{
+struct NeighborTableEntry{
     uint8_t address[ADDR_LENGTH];
     uint8_t lastReceived;
     uint8_t packet_success;
     uint8_t metric;
 };
-struct neighborTableEntry neighborTable[255];
-int neighborEntry = 1;
+struct NeighborTableEntry neighborTable[255];
+int neighborEntry = 0;
 
-struct routeTableEntry{
+struct RoutingTableEntry{
     uint8_t destination[ADDR_LENGTH];
     uint8_t nextHop[ADDR_LENGTH];
     uint8_t distance;
     uint8_t lastReceived;
     uint8_t metric;
 };
-struct routeTableEntry routeTable[255];
+struct RoutingTableEntry routeTable[255];
 int routeEntry = 0;
 
 int isHashNew(uint8_t hash[SHA1_LENGTH]){
@@ -128,13 +128,16 @@ struct BufferEntry popFromBuffer(){
 
 void printNeighborTable(){
 
+    Serial.printf("\n");
+    Serial.printf("Neighbor Table:\n");
     for( int i = 0 ; i <= neighborEntry ; i++){
         for(int j = 0 ; j < ADDR_LENGTH ; j++){
-            Serial.printf("%x", neighborTable[i].address[j]);
+            Serial.printf("%02x", neighborTable[i].address[j]);
         }
         Serial.printf(" %3d ", neighborTable[i].metric);
         Serial.printf("\n");
     }
+    Serial.printf("\n");
 }
 
 int checkNeighborTable(struct Packet packet){
@@ -179,10 +182,12 @@ uint8_t calculateMetric(int entry, uint8_t sequence, struct Metadata metadata){
     float weightedRSSI =  ((float) metadata.rssi)*RSSIWeight;
     float weightedSNR =  ((float) metadata.snr)*SNRWeight;
     uint8_t metric = weightedPacketSuccess+weightedRSSI+weightedSNR;
+    /*
     Serial.printf("weighted packet success: %3f\n", weightedPacketSuccess);
     Serial.printf("weighted RSSI: %3f\n", weightedRSSI);
     Serial.printf("weighted SNR: %3f\n", weightedSNR);
     Serial.printf("metric calculated: %3d\n", metric);
+    */
     return metric;
 }
 
@@ -202,9 +207,83 @@ void addNeighbor(struct Packet packet, struct Metadata metadata){
     neighborEntry++;
 }
 
+void printRoutingTable(){
+
+    Serial.printf("\n");
+    Serial.printf("Routing Table:\n");
+    for( int i = 0 ; i < routeEntry ; i++){
+        Serial.printf("%d hops from ", routeTable[i].distance);
+        for(int j = 0 ; j < ADDR_LENGTH ; j++){
+            Serial.printf("%02x", routeTable[i].destination[j]);
+        }
+        Serial.printf(" via ");
+        for(int j = 0 ; j < ADDR_LENGTH ; j++){
+            Serial.printf("%02x", routeTable[i].nextHop[j]);
+        }
+        Serial.printf(" metric %3d ", routeTable[i].metric);
+        Serial.printf("\n");
+    }
+    Serial.printf("\n\n");
+}
+
+void addRoute(struct RoutingTableEntry route){
+
+    memcpy(&routeTable[routeEntry], &route, sizeof(routeTable[routeEntry]));
+    Serial.printf("New route found! ");
+    for( int i = 0 ; i < ADDR_LENGTH; i++){
+        Serial.printf("%02x", routeTable[routeEntry].destination[i]);
+    }
+    Serial.printf("\n");
+    routeEntry++;
+}
+
+int checkRoutingTable(struct RoutingTableEntry route){
+
+    int routeOpt = 1;
+    //printRouteTable();
+    for( int i = 0 ; i <= routeEntry ; i++){
+        
+        if(memcmp(route.destination, routeTable[i].destination, sizeof(route.destination)) == 0){
+            if(memcmp(route.nextHop, routeTable[i].nextHop, sizeof(route.destination)) == 0){
+                routeOpt = 0; 
+                // already have this exact route, update metric
+            }else{
+                routeOpt = 2;
+                // already have this destination, but via a different neighbor
+                // not sure how to handle this, maybe keep better metric?
+            }
+        }else{
+            // this is a new route 
+        }
+    }
+    return routeOpt;
+}
+
+void parseRoutingPacket(struct Packet packet){
+    int numberOfRoutes = (packet.totalLength - HEADER_LENGTH) / ADDR_LENGTH;
+    Serial.printf("routes in packet: %d\n", numberOfRoutes);
+
+    struct RoutingTableEntry route[40]; 
+    for( int i = 0 ; i < numberOfRoutes ; i++){
+        memcpy(&route[i].destination, packet.data + (ADDR_LENGTH+1)*i, ADDR_LENGTH);
+        memcpy(&route[i].nextHop, packet.source, ADDR_LENGTH);
+        route[i].distance = 2;
+        route[i].metric = packet.data[(ADDR_LENGTH+1)*i];
+        int opt = checkRoutingTable(route[i]);
+        if(opt == 0){
+            Serial.printf("existing route\n");
+        }else if(opt == 1){
+            addRoute(route[i]);  
+        }else if(opt == 2){
+            Serial.printf("existing route from another neighbor\n");
+        }
+    }
+}
+
 void printPacketInfo(struct Packet packet, struct Metadata metadata){
 
     Serial.printf("\n");
+    Serial.printf("Packet Received: \n");
     Serial.printf("RSSI: %x\n", metadata.rssi);
     Serial.printf("SNR: %x\n", metadata.snr);
     Serial.printf("ttl: %d\n", packet.ttl);
@@ -258,13 +337,17 @@ int packet_received(char* data, size_t len) {
     
     switch(packet.type){
         case 'h' :
-            Serial.printf("this is a hello packet\n");
+            // hello packet;
             if(checkNeighborTable(packet)){
                 addNeighbor(packet, metadata);  
-            } 
+            }else{
+                // update metric
+            }
             break;
         case 'r':
-            Serial.printf("this is a routing packet\n");
+            // routing packet;
+            parseRoutingPacket(packet);
+            printRoutingTable();
             break;
         case 'c' :
             Serial.printf("this is a chat message\n");
@@ -363,18 +446,18 @@ void transmitHello(){
         //TODO: add randomness to message to avoid hashisng issues
         uint8_t destination[6] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
         struct Packet helloMessage = buildPacket(32, destination, 'h', byteMessage, messageLength); 
-
         uint8_t* sending = malloc(helloMessage.totalLength);
         sending = &helloMessage;
-
+        send_packet(sending, helloMessage.totalLength);
+        messageCount++;
+        lastHelloTime = time(NULL);
+        /* print in debugging mode
         Serial.printf("Sending beacon: ");
         for(int i = 0 ; i < helloMessage.totalLength ; i++){
             Serial.printf("%02x", sending[i]);
         }
         Serial.printf("\r\n");
-        send_packet(sending, helloMessage.totalLength);
-        messageCount++;
-        lastHelloTime = time(NULL);
+        */
     }
 }
 
@@ -383,42 +466,31 @@ long lastRouteTime = 0;
 void transmitRoutes(){
 
     if (time(NULL) - lastRouteTime > routeInterval) {
-        uint8_t data[239];
+        uint8_t data[240];
         int dataLength = 0;
-
-        for( int i = 0 ; i < ADDR_LENGTH ; i++ ){
-            data[dataLength] = mac[i];
-            dataLength++;
-        }
         // append routes from neighbor table
         for( int i = 0 ; i < neighborEntry ; i++){
             for( int j = 0 ; j < ADDR_LENGTH ; j++){
                 data[dataLength] = neighborTable[i].address[j];
                 dataLength++;
             }
+            data[dataLength] = neighborTable[i].metric;
+            dataLength++;
         }
-
-        Serial.printf("routing message: ");
-        for(int i = 0 ; i < dataLength ; i++){
-            Serial.printf("%02x", data[i]);
-        }
-        Serial.printf("\r\n");
-
         uint8_t destination[6] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
         struct Packet routeMessage = buildPacket(32, destination, 'r', data, dataLength); 
         uint8_t* sending = malloc(routeMessage.totalLength);
         sending = &routeMessage;
-
-        //Serial.printf("Sending routes: ");
-        //for(int i = 0 ; i < routeMessage.totalLength ; i++){
-        //    Serial.printf("%02x", sending[i]);
-        //}
-        //Serial.printf("\r\n");
-        
         send_packet(sending, routeMessage.totalLength);
         messageCount++;
-        
         lastRouteTime = time(NULL);
+        /*
+        Serial.printf("Sending routes: ");
+        for(int i = 0 ; i < routeMessage.totalLength ; i++){
+            Serial.printf("%02x", sending[i]);
+        }
+        Serial.printf("\r\n");
+        */
     }
 }
 
@@ -430,10 +502,8 @@ void wifiSetup(){
     for (int i = 0; i < ADDR_LENGTH ; i++){
         mac[i] = rand()%256;
     }
-
     // MAC address comes in backwards on ESP8266
     // reverse mac array
-    Serial.printf("%02x%02x%02x%02x%02x%02x\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac [5]);
     uint8_t tmp;
     int start = 0;
     int end = ADDR_LENGTH-1;
@@ -445,19 +515,16 @@ void wifiSetup(){
         start++; 
         end--; 
     }    
-    Serial.printf("%02x%02x%02x%02x%02x%02x\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac [5]);
-
     sprintf(macaddr, "%02x%02x%02x%02x%02x%02x\0", mac[0], mac[1], mac[2], mac[3], mac[4], mac [5]);
-
     Serial.printf("%s\n", macaddr);
-
+    // dummy neighbor for debugging purposes
     for( int i = 0 ; i < ADDR_LENGTH ; i++){
-        neighborTable[0].address[i] = 0xaa;
+        neighborTable[0].address[i] = 0xa1;
     }
     neighborTable[0].metric = 10; 
     neighborTable[0].packet_success = 10; 
     neighborTable[0].lastReceived = 10; 
-
+    neighborEntry++;
     //strcat(ssid, macaddr);
     //WiFi.hostname(hostName);
     //WiFi.mode(WIFI_AP);
@@ -472,7 +539,7 @@ int setup() {
     wifiSetup();
 
     // random wait at boot
-    int wait = rand()%30;
+    int wait = rand()%15;
     Serial.printf("waiting %d s\n", wait);
     nsleep(wait, 0);
 
