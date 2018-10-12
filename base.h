@@ -4,6 +4,7 @@
 
 #define STDIN 0
 #define STDOUT 1
+//#define DEBUG
 
 struct serial {
   int (*printf)(const char*, ...);
@@ -12,6 +13,8 @@ struct serial {
 struct serial Serial;
 
 int print_err(const char* format, ...);
+
+int debug_printf(const char* format, ...);
 
 int send_packet(char* data, uint8_t len);
 

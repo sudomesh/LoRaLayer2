@@ -24,9 +24,11 @@ int hashingEnabled = 1;
 int beaconModeReached = 0;
 
 // timeout intervals
-int bufferInterval = 5;
-int helloInterval = 10;
-int routeInterval = 25;
+int bufferInterval = 10;
+int helloInterval = 5;
+int routeInterval = 10;
+int messageInterval = 10;
+int learningTimeout = 30;
 
 // metric variables
 float packetSuccessWeight = .4;
@@ -100,6 +102,33 @@ int isHashNew(uint8_t hash[SHA1_LENGTH]){
     return hashNew;
 }
 
+void sendPacket(struct Packet packet) {
+
+    //if(!loraInitialized){
+    //    return;
+    //}
+    uint8_t* sending = malloc(packet.totalLength);
+    sending = &packet;
+    if(hashingEnabled){
+        // do not send message if already transmitted once
+        uint8_t hash[SHA1_LENGTH];
+        SHA1(sending, packet.totalLength, hash);
+        if(isHashNew(hash)){
+            send_packet(sending, packet.totalLength);
+        }
+    }
+    /*
+    LoRa.beginPacket();
+    for( int i = 0 ; i < outgoingLength ; i++){
+        LoRa.write(outgoing[i]);
+        Serial.printf("%c", outgoing[i]);
+    }
+    Serial.printf("\r\n");
+    LoRa.endPacket();
+    LoRa.receive();
+    */
+}
+
 void pushToBuffer(uint8_t message[256], int length){
 
     if(bufferEntry > 7){
@@ -130,7 +159,7 @@ void printNeighborTable(){
 
     Serial.printf("\n");
     Serial.printf("Neighbor Table:\n");
-    for( int i = 0 ; i <= neighborEntry ; i++){
+    for( int i = 0 ; i < neighborEntry ; i++){
         for(int j = 0 ; j < ADDR_LENGTH ; j++){
             Serial.printf("%02x", neighborTable[i].address[j]);
         }
@@ -143,7 +172,6 @@ void printNeighborTable(){
 int checkNeighborTable(struct Packet packet){
 
     int neighborNew = 1;
-    printNeighborTable();
     for( int i = 0 ; i <= neighborEntry ; i++){
         //had to use memcmp instead of strcmp?
         if(memcmp(packet.source, neighborTable[i].address, sizeof(packet.source)) == 0){
@@ -193,12 +221,12 @@ uint8_t calculateMetric(int entry, uint8_t sequence, struct Metadata metadata){
 
 void addNeighbor(struct Packet packet, struct Metadata metadata){
 
-    Serial.printf("New neighbor found: ");
+    debug_printf("New neighbor found: ");
     for( int i = 0 ; i < ADDR_LENGTH; i++){
         neighborTable[neighborEntry].address[i] = packet.source[i];
-        Serial.printf("%02x", neighborTable[neighborEntry].address[i]);
+        debug_printf("%02x", neighborTable[neighborEntry].address[i]);
     }
-    Serial.printf("\n");
+    debug_printf("\n");
     neighborTable[neighborEntry].lastReceived = packet.sequence;
     uint8_t packet_loss = calculatePacketLoss(neighborEntry, packet.sequence);
     neighborTable[neighborEntry].packet_success = neighborTable[neighborEntry].packet_success - packet_loss;
@@ -229,11 +257,11 @@ void printRoutingTable(){
 void addRoute(struct RoutingTableEntry route){
 
     memcpy(&routeTable[routeEntry], &route, sizeof(routeTable[routeEntry]));
-    Serial.printf("New route found! ");
+    debug_printf("New route found! ");
     for( int i = 0 ; i < ADDR_LENGTH; i++){
-        Serial.printf("%02x", routeTable[routeEntry].destination[i]);
+        debug_printf("%02x", routeTable[routeEntry].destination[i]);
     }
-    Serial.printf("\n");
+    debug_printf("\n");
     routeEntry++;
 }
 
@@ -242,7 +270,6 @@ int checkRoutingTable(struct RoutingTableEntry route){
     int routeOpt = 1;
     //printRouteTable();
     for( int i = 0 ; i <= routeEntry ; i++){
-        
         if(memcmp(route.destination, routeTable[i].destination, sizeof(route.destination)) == 0){
             if(memcmp(route.nextHop, routeTable[i].nextHop, sizeof(route.destination)) == 0){
                 routeOpt = 0; 
@@ -261,7 +288,7 @@ int checkRoutingTable(struct RoutingTableEntry route){
 
 void parseRoutingPacket(struct Packet packet){
     int numberOfRoutes = (packet.totalLength - HEADER_LENGTH) / ADDR_LENGTH;
-    Serial.printf("routes in packet: %d\n", numberOfRoutes);
+    debug_printf("routes in packet: %d\n", numberOfRoutes);
 
     struct RoutingTableEntry route[40]; 
     for( int i = 0 ; i < numberOfRoutes ; i++){
@@ -271,12 +298,25 @@ void parseRoutingPacket(struct Packet packet){
         route[i].metric = packet.data[(ADDR_LENGTH+1)*i];
         int opt = checkRoutingTable(route[i]);
         if(opt == 0){
-            Serial.printf("existing route\n");
+            debug_printf("existing route\n");
         }else if(opt == 1){
             addRoute(route[i]);  
         }else if(opt == 2){
-            Serial.printf("existing route from another neighbor\n");
+            debug_printf("existing route from another neighbor\n");
         }
+    }
+}
+
+void parseChatPacket(struct Packet packet){
+    
+    int hasRoute = 0;
+    for( int i = 0 ; i <= routeEntry ; i++){
+        if(memcmp(packet.destination, routeTable[i].destination, sizeof(packet.destination)) == 0){
+            hasRoute = 1;
+        }
+    }
+    if(hasRoute){
+        sendPacket(packet);
     }
 }
 
@@ -333,7 +373,7 @@ int packet_received(char* data, size_t len) {
     };
     memcpy(&packet.data, byteData + HEADER_LENGTH, packet.totalLength-HEADER_LENGTH);
 
-    printPacketInfo(packet, metadata);
+    //printPacketInfo(packet, metadata);
     
     switch(packet.type){
         case 'h' :
@@ -343,19 +383,23 @@ int packet_received(char* data, size_t len) {
             }else{
                 // update metric
             }
+            //printNeighborTable();
             break;
         case 'r':
             // routing packet;
             parseRoutingPacket(packet);
-            printRoutingTable();
+            //printRoutingTable();
             break;
         case 'c' :
-            Serial.printf("this is a chat message\n");
+            // chat packet
+            parseChatPacket(packet);
+            //Serial.printf("this is a chat message\n");
             break;
         case 'm' :
             Serial.printf("this is a map message\n");
             break;
         default :
+            printPacketInfo(packet, metadata);
             Serial.printf("message type not found\n");
     }
     pushToBuffer(data, len);
@@ -363,36 +407,6 @@ int packet_received(char* data, size_t len) {
     return 0;
 }
 
-void sendMessage(uint8_t* outgoing, int outgoingLength) {
-
-    //if(!loraInitialized){
-    //    return;
-    //}
-    if(hashingEnabled){
-        // do not send message if already transmitted once
-        uint8_t hash[SHA1_LENGTH];
-        SHA1(outgoing, outgoingLength, hash);
-        if(!isHashNew(hash)){
-            return;
-        }
-    }
-    Serial.printf("Transmitting packet: ");
-    for( int i = 0 ; i < outgoingLength ; i++){
-        Serial.printf("%x", outgoing[i]);
-    }
-    Serial.printf("\r\n");
-    /*
-    LoRa.beginPacket();
-    for( int i = 0 ; i < outgoingLength ; i++){
-        LoRa.write(outgoing[i]);
-        Serial.printf("%c", outgoing[i]);
-    }
-    Serial.printf("\r\n");
-    LoRa.endPacket();
-    LoRa.receive();
-    */
-    send_packet(outgoing, outgoingLength);
-}
 
 long lastCheckTime = 0;
 void checkBuffer(){
@@ -406,11 +420,13 @@ void checkBuffer(){
 
             struct BufferEntry transmit = popFromBuffer();
 
+            /*
             if(retransmitEnabled){
                 sendMessage(transmit.message, transmit.length);
             }
+            */
         }else{
-            Serial.printf("Buffer is empty\n");
+            debug_printf("Buffer is empty\n");
         }
         lastCheckTime = time(NULL);
     }
@@ -451,16 +467,13 @@ void transmitHello(){
         send_packet(sending, helloMessage.totalLength);
         messageCount++;
         lastHelloTime = time(NULL);
-        /* print in debugging mode
-        Serial.printf("Sending beacon: ");
+        debug_printf("Sending beacon: ");
         for(int i = 0 ; i < helloMessage.totalLength ; i++){
-            Serial.printf("%02x", sending[i]);
+            debug_printf("%02x", sending[i]);
         }
-        Serial.printf("\r\n");
-        */
+        debug_printf("\r\n");
     }
 }
-
 
 long lastRouteTime = 0;
 void transmitRoutes(){
@@ -484,13 +497,40 @@ void transmitRoutes(){
         send_packet(sending, routeMessage.totalLength);
         messageCount++;
         lastRouteTime = time(NULL);
-        /*
-        Serial.printf("Sending routes: ");
+        debug_printf("Sending routes: ");
         for(int i = 0 ; i < routeMessage.totalLength ; i++){
+            debug_printf("%02x", sending[i]);
+        }
+        debug_printf("\r\n");
+    }
+}
+
+long lastMessageTime = 0;
+void transmitToRandomRoute(){
+
+    if (time(NULL) - lastMessageTime > messageInterval) {
+        char buf[256];
+        char message[10] = "Hola from\0";
+        sprintf(buf, "%s %s", message, macaddr);
+        int dataLength = 22;
+        uint8_t* data = malloc(dataLength);
+        data = ( uint8_t* ) buf;
+
+        int choose = rand()%routeEntry;
+        uint8_t destination[6];
+        memcpy(destination, routeTable[choose].destination, sizeof(destination));
+        
+        struct Packet randomMessage = buildPacket(32, destination, 'c', data, dataLength); 
+        uint8_t* sending = malloc(randomMessage.totalLength);
+        sending = &randomMessage;
+        send_packet(sending, randomMessage.totalLength);
+        messageCount++;
+        lastMessageTime = time(NULL);
+        Serial.printf("Sending a message: ");
+        for(int i = 0 ; i < randomMessage.totalLength ; i++){
             Serial.printf("%02x", sending[i]);
         }
         Serial.printf("\r\n");
-        */
     }
 }
 
@@ -516,7 +556,7 @@ void wifiSetup(){
         end--; 
     }    
     sprintf(macaddr, "%02x%02x%02x%02x%02x%02x\0", mac[0], mac[1], mac[2], mac[3], mac[4], mac [5]);
-    Serial.printf("%s\n", macaddr);
+    debug_printf("%s\n", macaddr);
     // dummy neighbor for debugging purposes
     for( int i = 0 ; i < ADDR_LENGTH ; i++){
         neighborTable[0].address[i] = 0xa1;
@@ -532,38 +572,59 @@ void wifiSetup(){
     //WiFi.softAP(ssid);
 }
 
+long startTime;
+int chance;
 int setup() {
 
     Serial.printf("initialized\n");
+    debug_printf("debuggin enabled\n");
 
     wifiSetup();
 
     // random wait at boot
     int wait = rand()%15;
-    Serial.printf("waiting %d s\n", wait);
+    debug_printf("waiting %d s\n", wait);
     nsleep(wait, 0);
+
+    startTime = time(NULL);
+    learningTimeout += wait;
+        
+    chance=rand()%10;
+    if(chance == 5){
+        Serial.printf("I shall send a random message\n");
+    }
 
     return 0;
 }
 
+int state = 0;
 int loop() {
 
-    int packetSize; 
-
-    //if(transmitting() == 1){
-        // do stuff while LoRa packet is being sent
-        //Serial.print("transmitting a packet...\r\n");
-        //return;
-    //}else{
-        // do stuff when LoRa packet is NOT being sent
+    // State machine for testing purposes
+    if(state == 0){
         checkBuffer(); 
-
+        transmitHello();
+        /*
         if (beaconModeEnabled){
             transmitHello();
         }
+        */
         if (neighborEntry > 0){
             transmitRoutes();
         }
-    //}
+        if (time(NULL) - startTime > learningTimeout) {
+            state++;
+        }
+    }else if(state == 1){
+        Serial.printf("\nTables for %s", macaddr);
+        printNeighborTable();
+        printRoutingTable();
+        state++;
+    }else if(state == 2){
+        if(chance == 5){
+            transmitToRandomRoute();        
+        }
+    }
+
     nsleep(1, 0);
 }
