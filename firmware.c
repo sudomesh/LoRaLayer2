@@ -25,10 +25,11 @@ int beaconModeReached = 0;
 
 // timeout intervals
 int bufferInterval = 10;
-int helloInterval = 5;
-int routeInterval = 15;
+int helloInterval = 10;
+int routeInterval = 10;
 int messageInterval = 5;
-int learningTimeout = 70;
+int learningTimeout = 200;
+int random_factor = 30;
 
 // metric variables
 float packetSuccessWeight = .4;
@@ -268,6 +269,12 @@ int checkNeighborTable(struct Packet packet){
     return neighborNew;
 }
 
+void printAddress(uint8_t address[ADDR_LENGTH]){
+    for( int i = 0 ; i < ADDR_LENGTH; i++){
+        Serial.printf("%02x", address[i]);
+    }
+}
+
 int checkRoutingTable(struct RoutingTableEntry route){
 
     int routeOpt = 3;
@@ -276,22 +283,24 @@ int checkRoutingTable(struct RoutingTableEntry route){
         if(memcmp(route.destination, routeTable[i].destination, sizeof(route.destination)) == 0){
             if(memcmp(route.nextHop, routeTable[i].nextHop, sizeof(route.nextHop)) == 0){
                 // already have this exact route, update metric
-                debug_printf("existing route\n");
+                //debug_printf("existing route\n");
                 routeOpt = 0; 
+                return routeOpt;
             }else{
                 // already have this destination, but via a different neighbor
                 // not sure how to handle this, maybe keep better metric?
-                debug_printf("existing route from another neighbor\n");
+                //debug_printf("existing route from another neighbor\n");
+
                 routeOpt = 1;
+                return routeOpt;
             }
-        }else if(memcmp(route.destination, mac, sizeof(route.destination)) == 0){
+        }else 
+        if(memcmp(route.destination, mac, sizeof(route.destination)) == 0){
             //this is me don't add to routing table 
-            debug_printf("this route is my local address\n");
+            //debug_printf("this route is my local address\n");
             routeOpt = 2;
-        }else{
-            // this is a new route
-            routeOpt = 3;
-        }
+            return routeOpt;
+        } 
     }
     return routeOpt;
 }
@@ -357,8 +366,9 @@ void parseRoutingPacket(struct Packet packet){
     for( int i = 0 ; i < numberOfRoutes ; i++){
         memcpy(route[i].destination, packet.data + (ADDR_LENGTH+2)*i, ADDR_LENGTH);
         memcpy(route[i].nextHop, packet.source, ADDR_LENGTH);
-        route[i].distance = packet.data[(ADDR_LENGTH+1)*i]; // add a hop to distance
-        route[i].metric = packet.data[(ADDR_LENGTH+2)*i];
+        route[i].distance = packet.data[(ADDR_LENGTH+2)*i + ADDR_LENGTH]; 
+        route[i].distance++; // add a hop to distance
+        route[i].metric = packet.data[(ADDR_LENGTH+2)*i + ADDR_LENGTH+1];
         int opt = checkRoutingTable(route[i]);
         if(opt == 0){
             debug_printf("existing route\n");
@@ -430,7 +440,7 @@ int packet_received(char* data, size_t len) {
         byteData[14],
         byteData[15],
     };
-    memcpy(&packet.data, byteData + HEADER_LENGTH, packet.totalLength-HEADER_LENGTH);
+    memcpy(packet.data, byteData + HEADER_LENGTH, packet.totalLength-HEADER_LENGTH);
 
     //printPacketInfo(packet, metadata);
     
@@ -513,15 +523,6 @@ void transmitHello(){
         char message[10] = "Hola from\0";
         sprintf(data, "%s %s", message, macaddr);
         int dataLength = 22;
-        
-        debug_printf("Sending said message: ");
-        for(int i = 0 ; i < dataLength ; i++){
-            debug_printf("%02x", data[i]);
-        }
-        debug_printf("\n");
-        
-        //uint8_t* byteMessage = malloc(messageLength);
-        //byteMessage = ( uint8_t* ) buf;
         //TODO: add randomness to message to avoid hashisng issues
         uint8_t destination[6] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
         struct Packet helloMessage = buildPacket(32, destination, 'h', data, dataLength); 
@@ -560,15 +561,11 @@ void transmitRoutes(){
             data[dataLength] = routeTable[i].metric;
             dataLength++;
         }
-        debug_printf("Sending said routes: ");
+        debug_printf("Sending data: ");
         for(int i = 0 ; i < dataLength ; i++){
-            debug_printf("%02x", data[i]);
+            debug_printf("%02x ", data[i]);
         }
         debug_printf("\n");
-        //data[dataLength] = "\0";
-        //dataLength++;
-        //uint8_t* buf = malloc(dataLength);
-        //buf = (uint8_t*) data;
         uint8_t destination[6] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
         struct Packet routeMessage = buildPacket(32, destination, 'r', data, dataLength); 
         uint8_t* sending = malloc(sizeof(routeMessage));
@@ -614,13 +611,6 @@ void transmitToRandomRoute(){
             data[dataLength] = routeTable[choose].nextHop[i];
             dataLength++;
         }
-        debug_printf("Sending said datum: ");
-        for(int i = 0 ; i < dataLength ; i++){
-            debug_printf("%02x", data[i]);
-        }
-        debug_printf("\n");
-        //uint8_t* data = malloc(dataLength);
-        //data = (uint8_t*) buf;
         struct Packet randomMessage = buildPacket(32, destination, 'c', data, dataLength); 
         uint8_t* sending = malloc(sizeof(randomMessage));
         memcpy(sending, &randomMessage, sizeof(randomMessage));
@@ -658,16 +648,6 @@ void wifiSetup(){
     }    
     sprintf(macaddr, "%02x%02x%02x%02x%02x%02x\0", mac[0], mac[1], mac[2], mac[3], mac[4], mac [5]);
     debug_printf("%s\n", macaddr);
-    // dummy neighbor for debugging purposes
-    /*
-    for( int i = 0 ; i < ADDR_LENGTH ; i++){
-        neighborTable[0].address[i] = 0xa1;
-    }
-    neighborTable[0].metric = 10; 
-    neighborTable[0].packet_success = 10; 
-    neighborTable[0].lastReceived = 10; 
-    neighborEntry++;
-    */
     //strcat(ssid, macaddr);
     //WiFi.hostname(hostName);
     //WiFi.mode(WIFI_AP);
@@ -685,7 +665,7 @@ int setup() {
     wifiSetup();
 
     // random wait at boot
-    int wait = rand()%20;
+    int wait = rand()%random_factor;
     debug_printf("waiting %d s\n", wait);
     nsleep(wait, 0);
 
@@ -707,25 +687,22 @@ int loop() {
 
     // State machine for testing purposes
     if(state == 0){
-        checkBuffer(); 
+        //checkBuffer(); 
         transmitHello();
-        /*
-        if (beaconModeEnabled){
-            transmitHello();
-        }
-        */
-        if (neighborEntry > 0){
-            transmitRoutes();
-        }
-        if (time(NULL) - startTime > learningTimeout) {
+        if (time(NULL) - startTime > learningTimeout/4) {
             state++;
         }
     }else if(state == 1){
+        transmitRoutes();
+        if (time(NULL) - startTime > learningTimeout) {
+            state++;
+        }
+    }else if(state == 2){
         Serial.printf("\nTables for %s", macaddr);
         printNeighborTable();
         printRoutingTable();
         state++;
-    }else if(state == 2){
+    }else if(state == 3){
         if(chance == 3){
             transmitToRandomRoute();        
         }
