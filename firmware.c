@@ -24,11 +24,12 @@ int hashingEnabled = 1;
 int beaconModeReached = 0;
 
 // timeout intervals
-int bufferInterval = 10;
+int bufferInterval = 3;
 int helloInterval = 10;
 int routeInterval = 10;
 int messageInterval = 5;
-int learningTimeout = 200;
+int discoveryTimeout = 40;
+int learningTimeout = 120;
 int random_factor = 20;
 
 // metric variables
@@ -55,11 +56,13 @@ struct Packet {
 uint8_t hashTable[256][SHA1_LENGTH];
 uint8_t hashEntry = 0;
 
+/*
 struct BufferEntry {
     uint8_t message[256]; 
     uint8_t length;
 };
-struct BufferEntry messageBuffer[8];
+*/
+struct Packet buffer[8];
 int bufferEntry = 0;
 
 struct NeighborTableEntry{
@@ -132,30 +135,41 @@ int sendPacket(struct Packet packet) {
     */
 }
 
-void pushToBuffer(uint8_t message[256], int length){
+void pushToBuffer(struct Packet packet){
 
     if(bufferEntry > 7){
         bufferEntry = 0;
     }
-    messageBuffer[bufferEntry].length = length;
-    for( int i = 0 ; i < length ; i++){
-        messageBuffer[bufferEntry].message[i] = message[i];    
-    }
+
+    memset(&buffer[bufferEntry], 0, sizeof(buffer[bufferEntry]));
+    memcpy(&buffer[bufferEntry], &packet, sizeof(buffer[bufferEntry]));
     bufferEntry++;
 }
 
-struct BufferEntry popFromBuffer(){
+struct Packet popFromBuffer(){
 
     bufferEntry--;
-    struct BufferEntry pop;
-    pop.length = messageBuffer[bufferEntry].length;
-    uint8_t* popMessage = malloc(pop.length);
-    for( int i = 0 ; i < pop.length ; i++){
-        popMessage[i] = messageBuffer[bufferEntry].message[i];
-        messageBuffer[bufferEntry].message[i] = 0;
-    }
-    memcpy(&pop.message, popMessage, pop.length);
+    struct Packet pop;
+    memcpy(&pop, &buffer[bufferEntry], sizeof(pop));
     return pop; 
+}
+
+long lastCheckTime = 0;
+void checkBuffer(){
+
+    if (time(NULL) - lastCheckTime > bufferInterval) {
+        if (bufferEntry > 0){
+            // Uncomment if you want race condition to determine a single beacon node
+            if(!beaconModeReached){
+                beaconModeEnabled = 0;
+            }
+            struct Packet packet = popFromBuffer();
+            sendPacket(packet);
+        }else{
+            debug_printf("Buffer is empty\n");
+        }
+        lastCheckTime = time(NULL);
+    }
 }
 
 void printPacketInfo(struct Packet packet, struct Metadata metadata){
@@ -339,6 +353,15 @@ int updateRouteTable(struct RoutingTableEntry route, int entry){
     return entry;
 }
 
+void retransmitRoutedPacket(struct Packet packet, struct RoutingTableEntry route){
+
+    // replace with new nextHop
+    memcpy(packet.data, route.nextHop, sizeof(packet.data));
+    // transmit packet
+    pushToBuffer(packet);
+    //sendPacket(packet);
+}
+
 void parseHelloPacket(struct Packet packet, struct Metadata metadata){
 
     if(checkNeighborTable(packet)){
@@ -394,7 +417,7 @@ void parseChatPacket(struct Packet packet){
     int hasRoute = 0;
     for( int i = 0 ; i < routeEntry ; i++){
         if(memcmp(packet.destination, routeTable[i].destination, sizeof(packet.destination)) == 0){
-            hasRoute = 1;
+            hasRoute = i;
         }
     }
     uint8_t nextHop[ADDR_LENGTH];
@@ -403,7 +426,8 @@ void parseChatPacket(struct Packet packet){
         Serial.printf("I am the next hop\n");
         if(hasRoute){
             Serial.printf("and I have a route RETRANSMIT\n");
-            sendPacket(packet);
+            retransmitRoutedPacket(packet, routeTable[hasRoute]);
+            //sendPacket(packet);
         }else{
             Serial.printf("but I don't have a route\n");
         }
@@ -469,34 +493,9 @@ int packet_received(char* data, size_t len) {
             printPacketInfo(packet, metadata);
             Serial.printf("message type not found\n");
     }
-    pushToBuffer(data, len);
-
     return 0;
 }
 
-long lastCheckTime = 0;
-void checkBuffer(){
-
-    if (time(NULL) - lastCheckTime > bufferInterval) {
-        if (bufferEntry > 0){
-            // Uncomment if you want race condition to determine a single beacon node
-            if(!beaconModeReached){
-                beaconModeEnabled = 0;
-            }
-
-            struct BufferEntry transmit = popFromBuffer();
-
-            /*
-            if(retransmitEnabled){
-                sendMessage(transmit.message, transmit.length);
-            }
-            */
-        }else{
-            debug_printf("Buffer is empty\n");
-        }
-        lastCheckTime = time(NULL);
-    }
-}
 
 struct Packet buildPacket( uint8_t ttl, uint8_t dest[6], uint8_t type, uint8_t data[240], uint8_t dataLength){
 
@@ -527,7 +526,7 @@ void transmitHello(){
         int dataLength = 22;
         //TODO: add randomness to message to avoid hashisng issues
         uint8_t destination[6] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
-        struct Packet helloMessage = buildPacket(32, destination, 'h', data, dataLength); 
+        struct Packet helloMessage = buildPacket(1, destination, 'h', data, dataLength); 
         uint8_t* sending = malloc(sizeof(helloMessage));
         memcpy(sending, &helloMessage, sizeof(helloMessage));
         send_packet(sending, helloMessage.totalLength);
@@ -569,7 +568,7 @@ void transmitRoutes(){
         }
         debug_printf("\n");
         uint8_t destination[6] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
-        struct Packet routeMessage = buildPacket(32, destination, 'r', data, dataLength); 
+        struct Packet routeMessage = buildPacket(1, destination, 'r', data, dataLength); 
         uint8_t* sending = malloc(sizeof(routeMessage));
         memcpy(sending, &routeMessage, sizeof(routeMessage));
         send_packet(sending, routeMessage.totalLength);
@@ -687,22 +686,25 @@ int setup() {
 int state = 0;
 int loop() {
 
-    Serial.printf("learning... %d", time(NULL) - startTime);
-    printNeighborTable();
-    printRoutingTable();
     // State machine for testing purposes
     if(state == 0){
-        //checkBuffer(); 
+        Serial.printf("learning... %d", time(NULL) - startTime);
+        printNeighborTable();
+        printRoutingTable();
         transmitHello();
-        if (time(NULL) - startTime > learningTimeout/4) {
+        if (time(NULL) - startTime > discoveryTimeout) {
             state++;
         }
     }else if(state == 1){
+        Serial.printf("learning... %d", time(NULL) - startTime);
+        printNeighborTable();
+        printRoutingTable();
         transmitRoutes();
         if (time(NULL) - startTime > learningTimeout) {
             state++;
         }
     }else if(state == 2){
+        checkBuffer(); 
         if(chance == 3){
             transmitToRandomRoute();        
         }
