@@ -4,7 +4,7 @@
 
 #define STDIN 0
 #define STDOUT 1
-#define DEBUG
+//#define DEBUG
 
 struct serial {
   int (*printf)(const char*, ...);

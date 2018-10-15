@@ -29,7 +29,7 @@ int helloInterval = 10;
 int routeInterval = 10;
 int messageInterval = 5;
 int learningTimeout = 200;
-int random_factor = 30;
+int random_factor = 20;
 
 // metric variables
 float packetSuccessWeight = .4;
@@ -218,6 +218,11 @@ void printRoutingTable(){
     Serial.printf("\n\n");
 }
 
+void printAddress(uint8_t address[ADDR_LENGTH]){
+    for( int i = 0 ; i < ADDR_LENGTH; i++){
+        debug_printf("%02x", address[i]);
+    }
+}
 
 uint8_t calculatePacketLoss(int entry, uint8_t sequence){
 
@@ -269,40 +274,37 @@ int checkNeighborTable(struct Packet packet){
     return neighborNew;
 }
 
-void printAddress(uint8_t address[ADDR_LENGTH]){
-    for( int i = 0 ; i < ADDR_LENGTH; i++){
-        Serial.printf("%02x", address[i]);
-    }
-}
-
 int checkRoutingTable(struct RoutingTableEntry route){
 
-    int routeOpt = 3;
-    //printRouteTable();
+    int entry = routeEntry; // assume this is a new route
     for( int i = 0 ; i < routeEntry ; i++){
         if(memcmp(route.destination, routeTable[i].destination, sizeof(route.destination)) == 0){
             if(memcmp(route.nextHop, routeTable[i].nextHop, sizeof(route.nextHop)) == 0){
                 // already have this exact route, update metric
                 //debug_printf("existing route\n");
-                routeOpt = 0; 
-                return routeOpt;
+                entry = i; 
+                return entry;
             }else{
                 // already have this destination, but via a different neighbor
                 // not sure how to handle this, maybe keep better metric?
                 //debug_printf("existing route from another neighbor\n");
-
-                routeOpt = 1;
-                return routeOpt;
+                if(route.distance < routeTable[i].distance){
+                    // replace route if distance is better 
+                    entry = i;
+                    return entry;
+                }
+                entry = -1;
+                return entry;
             }
         }else 
         if(memcmp(route.destination, mac, sizeof(route.destination)) == 0){
             //this is me don't add to routing table 
             //debug_printf("this route is my local address\n");
-            routeOpt = 2;
-            return routeOpt;
+            entry = -1;
+            return entry;
         } 
     }
-    return routeOpt;
+    return entry;
 }
 
 int addNeighbor(struct Packet packet, struct Metadata metadata){
@@ -322,62 +324,61 @@ int addNeighbor(struct Packet packet, struct Metadata metadata){
     return neighborEntry-1;
 }
 
-int addRoute(struct RoutingTableEntry route){
+int updateRouteTable(struct RoutingTableEntry route, int entry){
 
-    memcpy(&routeTable[routeEntry], &route, sizeof(routeTable[routeEntry]));
-    debug_printf("New route found! ");
-    for( int i = 0 ; i < ADDR_LENGTH; i++){
-        debug_printf("%02x", routeTable[routeEntry].destination[i]);
+    memset(&routeTable[entry], 0, sizeof(routeTable[entry]));
+    memcpy(&routeTable[entry], &route, sizeof(routeTable[entry]));
+    if(entry == routeEntry){
+        routeEntry++;
+        debug_printf("new route found! ");
+    }else{
+        debug_printf("route updated! ");
     }
+    printAddress(routeTable[entry].destination);
     debug_printf("\n");
-    routeEntry++;
-    return routeEntry-1;
+    return entry;
 }
 
 void parseHelloPacket(struct Packet packet, struct Metadata metadata){
 
     if(checkNeighborTable(packet)){
-        int entry = addNeighbor(packet, metadata);  
+        int neighbor = addNeighbor(packet, metadata);  
         struct RoutingTableEntry route;
         memcpy(route.destination, packet.source, ADDR_LENGTH);
         memcpy(route.nextHop, packet.source, ADDR_LENGTH);
         route.distance = 1;
-        route.metric = neighborTable[entry].metric;
-        int opt = checkRoutingTable(route);
-        if(opt == 0){
-            debug_printf("existing route\n");
-        }else if(opt == 1){
-            debug_printf("existing route from another neighbor\n");
-        }else if(opt == 2){
-            debug_printf("this route is my local address\n");
-        }else if(opt == 3){
-            addRoute(route);  
+        route.metric = neighborTable[neighbor].metric;
+        int entry = checkRoutingTable(route);
+        if(entry == -1){
+            debug_printf("do nothing, already have route to ");
+            printAddress(route.destination);
+            debug_printf("\n");
+        }else{
+            updateRouteTable(route, entry);
         }
     }else{
         // update metric
     }
 }
 
-void parseRoutingPacket(struct Packet packet){
+void parseRoutingPacket(struct Packet packet, struct Metadata metadata){
     int numberOfRoutes = (packet.totalLength - HEADER_LENGTH) / (ADDR_LENGTH+2);
     debug_printf("routes in packet: %d\n", numberOfRoutes);
 
-    struct RoutingTableEntry route[40]; 
     for( int i = 0 ; i < numberOfRoutes ; i++){
-        memcpy(route[i].destination, packet.data + (ADDR_LENGTH+2)*i, ADDR_LENGTH);
-        memcpy(route[i].nextHop, packet.source, ADDR_LENGTH);
-        route[i].distance = packet.data[(ADDR_LENGTH+2)*i + ADDR_LENGTH]; 
-        route[i].distance++; // add a hop to distance
-        route[i].metric = packet.data[(ADDR_LENGTH+2)*i + ADDR_LENGTH+1];
-        int opt = checkRoutingTable(route[i]);
-        if(opt == 0){
-            debug_printf("existing route\n");
-        }else if(opt == 1){
-            debug_printf("existing route from another neighbor\n");
-        }else if(opt == 2){
-            debug_printf("this route is my local address\n");
-        }else if(opt == 3){
-            addRoute(route[i]);  
+        struct RoutingTableEntry route; 
+        memcpy(route.destination, packet.data + (ADDR_LENGTH+2)*i, ADDR_LENGTH);
+        memcpy(route.nextHop, packet.source, ADDR_LENGTH);
+        route.distance = packet.data[(ADDR_LENGTH+2)*i + ADDR_LENGTH]; 
+        route.distance++; // add a hop to distance
+        route.metric = packet.data[(ADDR_LENGTH+2)*i + ADDR_LENGTH+1];
+        int entry = checkRoutingTable(route);
+        if(entry == -1){
+            debug_printf("do nothing, already have route to ");
+            printAddress(route.destination);
+            debug_printf("\n");
+        }else{
+            updateRouteTable(route, entry);
         }
     }
 }
@@ -452,7 +453,8 @@ int packet_received(char* data, size_t len) {
             break;
         case 'r':
             // routing packet;
-            parseRoutingPacket(packet);
+            parseHelloPacket(packet, metadata);
+            parseRoutingPacket(packet, metadata);
             //printRoutingTable();
             break;
         case 'c' :
@@ -666,7 +668,7 @@ int setup() {
 
     // random wait at boot
     int wait = rand()%random_factor;
-    debug_printf("waiting %d s\n", wait);
+    Serial.printf("waiting %d s\n", wait);
     nsleep(wait, 0);
 
     startTime = time(NULL);
@@ -685,6 +687,9 @@ int setup() {
 int state = 0;
 int loop() {
 
+    Serial.printf("learning... %d", time(NULL) - startTime);
+    printNeighborTable();
+    printRoutingTable();
     // State machine for testing purposes
     if(state == 0){
         //checkBuffer(); 
@@ -698,11 +703,6 @@ int loop() {
             state++;
         }
     }else if(state == 2){
-        Serial.printf("\nTables for %s", macaddr);
-        printNeighborTable();
-        printRoutingTable();
-        state++;
-    }else if(state == 3){
         if(chance == 3){
             transmitToRandomRoute();        
         }
