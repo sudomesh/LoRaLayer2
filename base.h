@@ -16,9 +16,13 @@ int print_err(const char* format, ...);
 
 int debug_printf(const char* format, ...);
 
+int begin_packet();
+
 int send_packet(char* data, uint8_t len);
 
 int nsleep(unsigned int secs, useconds_t usecs);
+
+int transmitting;
 
 // you must declare these in your router
 int setup(); // called once on startup

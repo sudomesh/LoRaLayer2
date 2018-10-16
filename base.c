@@ -72,6 +72,32 @@ int print_err(const char* format, ...) {
   return ret;
 }
 
+int begin_packet(){
+    if(transmitting == 1){
+        // transmission in progress, do not begin packet
+        return 0;
+    }else{
+        // transmission done, begin packet
+        return 1;
+    }
+}
+
+int parse_metadata(char* data, uint8_t len){
+    data[len] = '\0';
+    switch(data[0]){
+        case 't':
+            if(data[1] == '0'){
+                transmitting = 0;
+            }else{
+                transmitting = 1;
+            }
+            break;
+        default:
+            perror("invalid metadata");
+    }
+    return 0;
+}
+
 int send_packet(char* data, uint8_t len) {
   
   char packet[258];
@@ -111,6 +137,7 @@ int main(int argc, char **argv) {
   ssize_t ret;
   ssize_t len = 0;
   ssize_t got;
+  ssize_t meta = 0;
 
   nsleep(0, 0);
 
@@ -158,6 +185,13 @@ int main(int argc, char **argv) {
     }
 
     if(ret && FD_ISSET(STDIN, &fds)) {
+      if(!meta){
+        ret = read(STDIN, &meta, 1);
+        if(ret < 0) {
+          perror("failed to read metadata flag");
+          return 1;
+        }
+      }
       if(!len) {
         // receive the length of the incoming packet
         ret = read(STDIN, &len, 1);
@@ -165,7 +199,6 @@ int main(int argc, char **argv) {
           perror("receiving length of incoming packet failed");
           return 1;
         }
-
         got = 0;
       }
 
@@ -185,9 +218,15 @@ int main(int argc, char **argv) {
         continue;
       }
 
-      if(ret = packet_received(buffer, len)) {
+      if(meta){
+        if(ret = parse_metadata(buffer, len)){
+          return ret;
+        }
+      }
+      else if(ret = packet_received(buffer, len)) {
         return ret;
       }
+      meta = 0;
       len = 0;
     }
 

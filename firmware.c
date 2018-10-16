@@ -18,13 +18,9 @@ uint8_t messageCount = 0;
 
 // mode switches
 int retransmitEnabled = 0;
-int pollingEnabled = 0;
-int beaconModeEnabled = 1;
 int hashingEnabled = 1;
-int beaconModeReached = 0;
 
 // timeout intervals
-int bufferInterval = 3;
 int helloInterval = 10;
 int routeInterval = 10;
 int messageInterval = 5;
@@ -52,18 +48,12 @@ struct Packet {
     uint8_t data[240];
 };
 
+struct Packet buffer[8];
+int bufferEntry = 0;
+
 // table structures
 uint8_t hashTable[256][SHA1_LENGTH];
 uint8_t hashEntry = 0;
-
-/*
-struct BufferEntry {
-    uint8_t message[256]; 
-    uint8_t length;
-};
-*/
-struct Packet buffer[8];
-int bufferEntry = 0;
 
 struct NeighborTableEntry{
     uint8_t address[ADDR_LENGTH];
@@ -154,21 +144,13 @@ struct Packet popFromBuffer(){
     return pop; 
 }
 
-long lastCheckTime = 0;
 void checkBuffer(){
 
-    if (time(NULL) - lastCheckTime > bufferInterval) {
-        if (bufferEntry > 0){
-            // Uncomment if you want race condition to determine a single beacon node
-            if(!beaconModeReached){
-                beaconModeEnabled = 0;
-            }
-            struct Packet packet = popFromBuffer();
-            sendPacket(packet);
-        }else{
-            debug_printf("Buffer is empty\n");
-        }
-        lastCheckTime = time(NULL);
+    if (bufferEntry > 0){
+        struct Packet packet = popFromBuffer();
+        sendPacket(packet);
+    }else{
+        debug_printf("Buffer is empty\n");
     }
 }
 
@@ -267,12 +249,10 @@ uint8_t calculateMetric(int entry, uint8_t sequence, struct Metadata metadata){
     float weightedRSSI =  ((float) metadata.rssi)*RSSIWeight;
     float weightedSNR =  ((float) metadata.snr)*SNRWeight;
     uint8_t metric = weightedPacketSuccess+weightedRSSI+weightedSNR;
-    /*
-    Serial.printf("weighted packet success: %3f\n", weightedPacketSuccess);
-    Serial.printf("weighted RSSI: %3f\n", weightedRSSI);
-    Serial.printf("weighted SNR: %3f\n", weightedSNR);
-    Serial.printf("metric calculated: %3d\n", metric);
-    */
+    debug_printf("weighted packet success: %3f\n", weightedPacketSuccess);
+    debug_printf("weighted RSSI: %3f\n", weightedRSSI);
+    debug_printf("weighted SNR: %3f\n", weightedSNR);
+    debug_printf("metric calculated: %3d\n", metric);
     return metric;
 }
 
@@ -519,7 +499,6 @@ long lastHelloTime = 0;
 void transmitHello(){
 
     if (time(NULL) - lastHelloTime > helloInterval) {
-        beaconModeReached = 1; 
         char data[240];
         char message[10] = "Hola from\0";
         sprintf(data, "%s %s", message, macaddr);
@@ -686,29 +665,31 @@ int setup() {
 int state = 0;
 int loop() {
 
-    // State machine for testing purposes
-    if(state == 0){
-        Serial.printf("learning... %d", time(NULL) - startTime);
-        printNeighborTable();
-        printRoutingTable();
-        transmitHello();
-        if (time(NULL) - startTime > discoveryTimeout) {
-            state++;
-        }
-    }else if(state == 1){
-        Serial.printf("learning... %d", time(NULL) - startTime);
-        printNeighborTable();
-        printRoutingTable();
-        transmitRoutes();
-        if (time(NULL) - startTime > learningTimeout) {
-            state++;
-        }
-    }else if(state == 2){
-        checkBuffer(); 
-        if(chance == 3){
-            transmitToRandomRoute();        
+    if(!begin_packet()){
+        Serial.printf("transmit in progress please wait");
+    }else{
+        if(state == 0){
+            Serial.printf("learning... %d", time(NULL) - startTime);
+            printNeighborTable();
+            printRoutingTable();
+            transmitHello();
+            if (time(NULL) - startTime > discoveryTimeout) {
+                state++;
+            }
+        }else if(state == 1){
+            Serial.printf("learning... %d", time(NULL) - startTime);
+            printNeighborTable();
+            printRoutingTable();
+            transmitRoutes();
+            if (time(NULL) - startTime > learningTimeout) {
+                state++;
+            }
+        }else if(state == 2){
+            checkBuffer(); 
+            if(chance == 3){
+                transmitToRandomRoute();        
+            }
         }
     }
-
     nsleep(1, 0);
 }
