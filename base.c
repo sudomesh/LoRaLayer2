@@ -92,6 +92,10 @@ int parse_metadata(char* data, uint8_t len){
                 transmitting = 1;
             }
             break;
+        case 'd':
+            timeDistortion = strtod((data + 1), NULL);
+            fprintf(stderr, "new time distortion %f", timeDistortion);
+            break;
         default:
             perror("invalid metadata");
     }
