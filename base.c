@@ -130,6 +130,19 @@ int send_packet(char* data, uint8_t len) {
 
 int main(int argc, char **argv) {
 
+  // 1 second in the simulation == 1 second in real life * timeDistortion
+  timeDistortion = 1;
+
+  int opt;
+  while ((opt = getopt(argc, argv, "t:")) != -1) {
+    switch (opt) {
+      case 't': timeDistortion = strtod(optarg, NULL); break;
+      default:
+        perror("Bad args\n");
+        return 1;
+    }
+  }
+
   char buffer[257];
   struct timeval tv;
   fd_set fds;

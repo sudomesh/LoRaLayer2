@@ -20,12 +20,6 @@ uint8_t messageCount = 0;
 int retransmitEnabled = 0;
 int hashingEnabled = 1;
 
-// 1 second in the simulation == 1 second in real life * timeDistortion
-float timeDistortion = 1;
-int simulationTime(int realTime) {
-    return realTime * timeDistortion;
-}
-
 // timeout intervals
 int _helloInterval = 10;
 int _routeInterval = 10;
@@ -34,6 +28,9 @@ int _discoveryTimeout = 40;
 int _learningTimeout = 120;
 int _maxRandomDelay = 20;
 
+int simulationTime(int realTime) {
+    return realTime * timeDistortion;
+}
 int helloInterval() {
     return simulationTime(_helloInterval);
 }

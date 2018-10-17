@@ -24,6 +24,8 @@ int nsleep(unsigned int secs, useconds_t usecs);
 
 int transmitting;
 
+float timeDistortion;
+
 // you must declare these in your router
 int setup(); // called once on startup
 int loop(); // called once per event loop iteration
