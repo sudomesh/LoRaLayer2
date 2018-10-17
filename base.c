@@ -44,22 +44,19 @@ int nsleep(unsigned int secs, useconds_t usecs) {
   return 0;
 }
 
-#ifdef DEBUG
 int debug_printf(const char* format, ...) {
-  int ret;
-
-  va_list args;
-  va_start(args, format);
-  ret = vfprintf(stderr, format, args);
-  va_end(args);
-  fflush(stderr);
-  return ret;
+  if(DEBUG){
+    int ret;
+    va_list args;
+    va_start(args, format);
+    ret = vfprintf(stderr, format, args);
+    va_end(args);
+    fflush(stderr);
+    return ret;
+  }else{
+    return 0;
+  }
 }
-#else
-int debug_printf(const char* format, ...) {
-  return 0;
-}
-#endif
 
 int print_err(const char* format, ...) {
   int ret;

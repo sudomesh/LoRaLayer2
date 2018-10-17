@@ -24,8 +24,8 @@ int hashingEnabled = 1;
 int _helloInterval = 10;
 int _routeInterval = 10;
 int _messageInterval = 5;
-int _discoveryTimeout = 40;
-int _learningTimeout = 120;
+int _discoveryTimeout = 30;
+int _learningTimeout = 400;
 int _maxRandomDelay = 20;
 
 int simulationTime(int realTime) {
@@ -220,7 +220,7 @@ void printNeighborTable(){
 void printRoutingTable(){
 
     Serial.printf("\n");
-    Serial.printf("Routing Table:\n");
+    Serial.printf("Routing Table: total routes %d\n", routeEntry);
     for( int i = 0 ; i < routeEntry ; i++){
         Serial.printf("%d hops from ", routeTable[i].distance);
         for(int j = 0 ; j < ADDR_LENGTH ; j++){
@@ -547,7 +547,6 @@ void transmitRoutes(){
     if (time(NULL) - lastRouteTime > routeInterval()) {
         uint8_t data[240];
         int dataLength = 0;
-        printRoutingTable();
         debug_printf("number of routes before transmit: %d\n", routeEntry);
         if (routeEntry == 0){
             lastRouteTime = time(NULL);
@@ -688,23 +687,29 @@ int state = 0;
 int loop() {
 
     if(!begin_packet()){
-        Serial.printf("transmit in progress please wait");
+        debug_printf("transmit in progress please wait");
     }else{
         if(state == 0){
-            Serial.printf("learning... %d", time(NULL) - startTime);
-            printNeighborTable();
-            printRoutingTable();
+            Serial.printf("learning... %d\r", time(NULL) - startTime);
+            if(DEBUG){
+                printNeighborTable();
+                printRoutingTable();
+            }
             transmitHello();
-            if (time(NULL) - startTime > discoveryTimeout()) {
+            if(time(NULL) - startTime > discoveryTimeout()) {
                 state++;
             }
         }else if(state == 1){
-            Serial.printf("learning... %d", time(NULL) - startTime);
-            printNeighborTable();
-            printRoutingTable();
+            Serial.printf("learning... %d\r", time(NULL) - startTime);
+            if(DEBUG){
+                printNeighborTable();
+                printRoutingTable();
+            }
             transmitRoutes();
-            if (time(NULL) - startTime > learningTimeout()) {
+            if(time(NULL) - startTime > learningTimeout()) {
                 state++;
+                printNeighborTable();
+                printRoutingTable();
             }
         }else if(state == 2){
             checkBuffer(); 
@@ -713,5 +718,5 @@ int loop() {
             }
         }
     }
-    nsleep(1, 0);
+    nsleep(0, 1000000*simulationTime(1));
 }
