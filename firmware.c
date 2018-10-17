@@ -20,13 +20,38 @@ uint8_t messageCount = 0;
 int retransmitEnabled = 0;
 int hashingEnabled = 1;
 
+// 1 second in the simulation == 1 second in real life * timeDistortion
+float timeDistortion = 1;
+int simulationTime(int realTime) {
+    return realTime * timeDistortion;
+}
+
 // timeout intervals
-int helloInterval = 10;
-int routeInterval = 10;
-int messageInterval = 5;
-int discoveryTimeout = 40;
-int learningTimeout = 120;
-int random_factor = 20;
+int _helloInterval = 10;
+int _routeInterval = 10;
+int _messageInterval = 5;
+int _discoveryTimeout = 40;
+int _learningTimeout = 120;
+int _maxRandomDelay = 20;
+
+int helloInterval() {
+    return simulationTime(_helloInterval);
+}
+int routeInterval() {
+    return simulationTime(_routeInterval);
+}
+int messageInterval() {
+    return simulationTime(_messageInterval);
+}
+int discoveryTimeout() {
+    return simulationTime(_discoveryTimeout);
+}
+int learningTimeout() {
+    return simulationTime(_learningTimeout);
+}
+int maxRandomDelay() {
+    return simulationTime(_maxRandomDelay);
+}
 
 // metric variables
 float packetSuccessWeight = .4;
@@ -498,7 +523,7 @@ struct Packet buildPacket( uint8_t ttl, uint8_t dest[6], uint8_t type, uint8_t d
 long lastHelloTime = 0;
 void transmitHello(){
 
-    if (time(NULL) - lastHelloTime > helloInterval) {
+    if (time(NULL) - lastHelloTime > helloInterval()) {
         char data[240];
         char message[10] = "Hola from\0";
         sprintf(data, "%s %s", message, macaddr);
@@ -522,7 +547,7 @@ void transmitHello(){
 long lastRouteTime = 0;
 void transmitRoutes(){
 
-    if (time(NULL) - lastRouteTime > routeInterval) {
+    if (time(NULL) - lastRouteTime > routeInterval()) {
         uint8_t data[240];
         int dataLength = 0;
         printRoutingTable();
@@ -564,7 +589,7 @@ void transmitRoutes(){
 long lastMessageTime = 0;
 void transmitToRandomRoute(){
 
-    if (time(NULL) - lastMessageTime > messageInterval) {
+    if (time(NULL) - lastMessageTime > messageInterval()) {
 
         if (routeEntry == 0){
             Serial.printf("trying to send but I have no routes ");
@@ -645,14 +670,14 @@ int setup() {
     wifiSetup();
 
     // random wait at boot
-    int wait = rand()%random_factor;
+    int wait = rand()%maxRandomDelay();
     Serial.printf("waiting %d s\n", wait);
     nsleep(wait, 0);
 
     startTime = time(NULL);
     lastHelloTime = time(NULL);
     lastRouteTime = time(NULL);
-    learningTimeout += wait;
+    _learningTimeout += wait;
         
     chance=rand()%5;
     if(chance == 3){
@@ -673,7 +698,7 @@ int loop() {
             printNeighborTable();
             printRoutingTable();
             transmitHello();
-            if (time(NULL) - startTime > discoveryTimeout) {
+            if (time(NULL) - startTime > discoveryTimeout()) {
                 state++;
             }
         }else if(state == 1){
@@ -681,7 +706,7 @@ int loop() {
             printNeighborTable();
             printRoutingTable();
             transmitRoutes();
-            if (time(NULL) - startTime > learningTimeout) {
+            if (time(NULL) - startTime > learningTimeout()) {
                 state++;
             }
         }else if(state == 2){
