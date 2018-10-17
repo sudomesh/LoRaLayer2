@@ -51,9 +51,11 @@ int maxRandomDelay() {
 }
 
 // metric variables
-float packetSuccessWeight = .4;
-float RSSIWeight = .3;
-float SNRWeight = .3;
+float packetSuccessWeight = .8;
+//float RSSIWeight = .3;
+//float SNRWeight = .3;
+float randomMetricWeight = .2;
+uint8_t randomMetric;
 
 // packet structures
 struct Metadata {
@@ -268,26 +270,28 @@ uint8_t calculatePacketLoss(int entry, uint8_t sequence){
 uint8_t calculateMetric(int entry, uint8_t sequence, struct Metadata metadata){
 
     float weightedPacketSuccess =  ((float) neighborTable[entry].packet_success)*packetSuccessWeight;
-    float weightedRSSI =  ((float) metadata.rssi)*RSSIWeight;
-    float weightedSNR =  ((float) metadata.snr)*SNRWeight;
-    uint8_t metric = weightedPacketSuccess+weightedRSSI+weightedSNR;
+    float weightedRandomness =  ((float) randomMetric)*randomMetricWeight;
+    //float weightedRSSI =  ((float) metadata.rssi)*RSSIWeight;
+    //float weightedSNR =  ((float) metadata.snr)*SNRWeight;
+    uint8_t metric = weightedPacketSuccess+weightedRandomness;
     debug_printf("weighted packet success: %3f\n", weightedPacketSuccess);
-    debug_printf("weighted RSSI: %3f\n", weightedRSSI);
-    debug_printf("weighted SNR: %3f\n", weightedSNR);
+    debug_printf("weighted randomness: %3f\n", weightedRandomness);
+    //debug_printf("weighted RSSI: %3f\n", weightedRSSI);
+    //debug_printf("weighted SNR: %3f\n", weightedSNR);
     debug_printf("metric calculated: %3d\n", metric);
     return metric;
 }
 
-int checkNeighborTable(struct Packet packet){
+int checkNeighborTable(struct NeighborTableEntry neighbor){
 
-    int neighborNew = 1;
+    int entry = routeEntry;
     for( int i = 0 ; i < neighborEntry ; i++){
         //had to use memcmp instead of strcmp?
-        if(memcmp(packet.source, neighborTable[i].address, sizeof(packet.source)) == 0){
-            neighborNew = 0; 
+        if(memcmp(neighbor.address, neighborTable[i].address, sizeof(neighbor.address)) == 0){
+            entry = i; 
         }
     }
-    return neighborNew;
+    return entry;
 }
 
 int checkRoutingTable(struct RoutingTableEntry route){
@@ -297,12 +301,10 @@ int checkRoutingTable(struct RoutingTableEntry route){
         if(memcmp(route.destination, routeTable[i].destination, sizeof(route.destination)) == 0){
             if(memcmp(route.nextHop, routeTable[i].nextHop, sizeof(route.nextHop)) == 0){
                 // already have this exact route, update metric
-                //debug_printf("existing route\n");
                 entry = i; 
                 return entry;
             }else{
                 // already have this destination, but via a different neighbor
-                // not sure how to handle this, maybe keep better metric?
                 //debug_printf("existing route from another neighbor\n");
                 if(route.distance < routeTable[i].distance){
                     // replace route if distance is better 
@@ -323,21 +325,17 @@ int checkRoutingTable(struct RoutingTableEntry route){
     return entry;
 }
 
-int addNeighbor(struct Packet packet, struct Metadata metadata){
+int updateNeighborTable(struct NeighborTableEntry neighbor, int entry){
 
-    debug_printf("New neighbor found: ");
-    for( int i = 0 ; i < ADDR_LENGTH; i++){
-        neighborTable[neighborEntry].address[i] = packet.source[i];
-        debug_printf("%02x", neighborTable[neighborEntry].address[i]);
+    memset(&neighborTable[entry], 0, sizeof(neighborTable[entry]));
+    memcpy(&neighborTable[entry], &neighbor, sizeof(neighborTable[entry]));
+    if(entry == neighborEntry){
+        neighborEntry++;
+        debug_printf("new neighbor found: ");
+    }else{
+        debug_printf("neighbor updated! ");
     }
-    debug_printf("\n");
-    neighborTable[neighborEntry].lastReceived = packet.sequence;
-    uint8_t packet_loss = calculatePacketLoss(neighborEntry, packet.sequence);
-    neighborTable[neighborEntry].packet_success = neighborTable[neighborEntry].packet_success - packet_loss;
-    uint8_t metric = calculateMetric(neighborEntry, packet.sequence, metadata); 
-    neighborTable[neighborEntry].metric = metric;
-    neighborEntry++;
-    return neighborEntry-1;
+    return neighborEntry;
 }
 
 int updateRouteTable(struct RoutingTableEntry route, int entry){
@@ -366,23 +364,30 @@ void retransmitRoutedPacket(struct Packet packet, struct RoutingTableEntry route
 
 void parseHelloPacket(struct Packet packet, struct Metadata metadata){
 
-    if(checkNeighborTable(packet)){
-        int neighbor = addNeighbor(packet, metadata);  
-        struct RoutingTableEntry route;
-        memcpy(route.destination, packet.source, ADDR_LENGTH);
-        memcpy(route.nextHop, packet.source, ADDR_LENGTH);
-        route.distance = 1;
-        route.metric = neighborTable[neighbor].metric;
-        int entry = checkRoutingTable(route);
-        if(entry == -1){
-            debug_printf("do nothing, already have route to ");
-            printAddress(route.destination);
-            debug_printf("\n");
-        }else{
-            updateRouteTable(route, entry);
-        }
+    struct NeighborTableEntry neighbor;
+    for( int i = 0 ; i < ADDR_LENGTH; i++){
+        neighbor.address[i] = packet.source[i];
+    }
+    int n_entry = checkNeighborTable(neighbor);
+    neighbor.lastReceived = packet.sequence;
+    uint8_t packet_loss = calculatePacketLoss(n_entry, packet.sequence);
+    neighbor.packet_success = neighborTable[n_entry].packet_success - packet_loss;
+    uint8_t metric = calculateMetric(n_entry, packet.sequence, metadata); 
+    neighbor.metric = metric;
+    updateNeighborTable(neighbor, n_entry);  
+
+    struct RoutingTableEntry route;
+    memcpy(route.destination, packet.source, ADDR_LENGTH);
+    memcpy(route.nextHop, packet.source, ADDR_LENGTH);
+    route.distance = 1;
+    route.metric = neighborTable[n_entry].metric;
+    int r_entry = checkRoutingTable(route);
+    if(r_entry == -1){
+        debug_printf("do nothing, already have better route to ");
+        printAddress(route.destination);
+        debug_printf("\n");
     }else{
-        // update metric
+        updateRouteTable(route, r_entry);
     }
 }
 
@@ -410,12 +415,10 @@ void parseRoutingPacket(struct Packet packet, struct Metadata metadata){
 
 void parseChatPacket(struct Packet packet){
     
-    
     if(memcmp(packet.destination, mac, sizeof(packet.destination)) == 0){
         Serial.printf("this message is for me %s\n", macaddr);
         return;
     }
-
     int hasRoute = 0;
     for( int i = 0 ; i < routeEntry ; i++){
         if(memcmp(packet.destination, routeTable[i].destination, sizeof(packet.destination)) == 0){
@@ -425,16 +428,15 @@ void parseChatPacket(struct Packet packet){
     uint8_t nextHop[ADDR_LENGTH];
     memcpy(nextHop, packet.data, sizeof(nextHop));
     if(memcmp(nextHop, mac, sizeof(nextHop)) == 0){
-        Serial.printf("I am the next hop\n");
+        Serial.printf("I am the next hop ");
         if(hasRoute){
             Serial.printf("and I have a route RETRANSMIT\n");
             retransmitRoutedPacket(packet, routeTable[hasRoute]);
-            //sendPacket(packet);
         }else{
             Serial.printf("but I don't have a route\n");
         }
     }else{
-        Serial.printf("I am not the next hop\n");
+        Serial.printf("I am not the next hop ");
         if(hasRoute){
             Serial.printf("but I have a route\n");
         }else{
@@ -513,7 +515,6 @@ struct Packet buildPacket( uint8_t ttl, uint8_t dest[6], uint8_t type, uint8_t d
         type 
     };
     memcpy(&packet.data, buffer, packet.totalLength);
-    //free(buffer);
     return packet;
 }
 
@@ -674,6 +675,8 @@ int setup() {
     lastHelloTime = time(NULL);
     lastRouteTime = time(NULL);
     _learningTimeout += wait;
+
+    randomMetric = rand()%255;
         
     chance=rand()%5;
     if(chance == 3){
