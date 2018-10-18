@@ -9,6 +9,7 @@
 #define HEADER_LENGTH 16
 #define SHA1_LENGTH 40
 #define ADDR_LENGTH 6 
+#define MAX_ROUTES_PER_PACKET 30
 
 uint8_t mac[ADDR_LENGTH];
 char macaddr[ADDR_LENGTH*2];
@@ -55,12 +56,12 @@ float packetSuccessWeight = .8;
 //float RSSIWeight = .3;
 //float SNRWeight = .3;
 float randomMetricWeight = .2;
-uint8_t randomMetric;
 
 // packet structures
 struct Metadata {
     uint8_t rssi;
     uint8_t snr;
+    uint8_t randomness;
 };
 struct Packet {
     uint8_t ttl;
@@ -70,6 +71,10 @@ struct Packet {
     uint8_t sequence;
     uint8_t type;
     uint8_t data[240];
+};
+struct RoutedMessage {
+    uint8_t nextHop[6];
+    uint8_t data[234];
 };
 
 struct Packet buffer[8];
@@ -173,9 +178,8 @@ void checkBuffer(){
     if (bufferEntry > 0){
         struct Packet packet = popFromBuffer();
         sendPacket(packet);
-    }else{
-        debug_printf("Buffer is empty\n");
     }
+    //else buffer is empty;
 }
 
 void printPacketInfo(struct Packet packet, struct Metadata metadata){
@@ -270,7 +274,7 @@ uint8_t calculatePacketLoss(int entry, uint8_t sequence){
 uint8_t calculateMetric(int entry, uint8_t sequence, struct Metadata metadata){
 
     float weightedPacketSuccess =  ((float) neighborTable[entry].packet_success)*packetSuccessWeight;
-    float weightedRandomness =  ((float) randomMetric)*randomMetricWeight;
+    float weightedRandomness =  ((float) metadata.randomness)*randomMetricWeight;
     //float weightedRSSI =  ((float) metadata.rssi)*RSSIWeight;
     //float weightedSNR =  ((float) metadata.snr)*SNRWeight;
     uint8_t metric = weightedPacketSuccess+weightedRandomness;
@@ -305,13 +309,17 @@ int checkRoutingTable(struct RoutingTableEntry route){
                 return entry;
             }else{
                 // already have this destination, but via a different neighbor
-                //debug_printf("existing route from another neighbor\n");
                 if(route.distance < routeTable[i].distance){
                     // replace route if distance is better 
                     entry = i;
-                    return entry;
+                }else 
+                if(route.distance == routeTable[i].distance){
+                    // keep route if distance is the same as an existing 
+                    entry = routeEntry;
+                }else{
+                    // ignore route if its distance is worse
+                    entry = -1;
                 }
-                entry = -1;
                 return entry;
             }
         }else 
@@ -335,7 +343,7 @@ int updateNeighborTable(struct NeighborTableEntry neighbor, int entry){
     }else{
         debug_printf("neighbor updated! ");
     }
-    return neighborEntry;
+    return entry;
 }
 
 int updateRouteTable(struct RoutingTableEntry route, int entry){
@@ -353,21 +361,56 @@ int updateRouteTable(struct RoutingTableEntry route, int entry){
     return entry;
 }
 
-void retransmitRoutedPacket(struct Packet packet, struct RoutingTableEntry route){
-
-    // replace with new nextHop
-    memcpy(packet.data, route.nextHop, sizeof(packet.data));
-    // transmit packet
-    pushToBuffer(packet);
-    //sendPacket(packet);
+int selectRoute(struct Packet packet){
+    int* possibleRoute;
+    int count = 0;
+    for( int i = 0 ; i < routeEntry ; i++){
+        if(memcmp(packet.destination, routeTable[i].destination, sizeof(packet.destination)) == 0){
+            possibleRoute[count] = i;
+            count++;
+        }
+    }
+    int entry = -1;
+    if(count == 0){
+        // node has no routes
+        return entry;
+    }else
+    if(count == 1){
+        // node have only one known route
+        entry = possibleRoute[0];
+        return entry;
+    }else
+    if(count >= 2){
+        entry  = 0;
+        for(int i = 1 ; i < count ; i++){
+            if(routeTable[possibleRoute[i]].metric > routeTable[entry].metric){
+                entry = possibleRoute[i];
+            }
+        }
+        return entry;
+    }
 }
 
-void parseHelloPacket(struct Packet packet, struct Metadata metadata){
+void retransmitRoutedPacket(struct Packet packet, struct RoutingTableEntry route){
+
+    struct RoutedMessage oldMessage;
+    struct RoutedMessage newMessage;
+    memcpy(&oldMessage, packet.data, sizeof(oldMessage));
+    memcpy(newMessage.nextHop, route.nextHop, sizeof(newMessage.nextHop));
+    memcpy(newMessage.data, oldMessage.data, sizeof(newMessage.data));
+
+    // decrement ttl
+    packet.ttl--;
+    memcpy(packet.data, &newMessage, sizeof(packet.data));
+
+    // queue packet to be transmitted
+    pushToBuffer(packet);
+}
+
+int parseHelloPacket(struct Packet packet, struct Metadata metadata){
 
     struct NeighborTableEntry neighbor;
-    for( int i = 0 ; i < ADDR_LENGTH; i++){
-        neighbor.address[i] = packet.source[i];
-    }
+    memcpy(neighbor.address, packet.source, sizeof(neighbor.address));
     int n_entry = checkNeighborTable(neighbor);
     neighbor.lastReceived = packet.sequence;
     uint8_t packet_loss = calculatePacketLoss(n_entry, packet.sequence);
@@ -387,13 +430,18 @@ void parseHelloPacket(struct Packet packet, struct Metadata metadata){
         printAddress(route.destination);
         debug_printf("\n");
     }else{
+        //if(routeEntry <= 30){
         updateRouteTable(route, r_entry);
+        //}
     }
+    return n_entry;
 }
 
-void parseRoutingPacket(struct Packet packet, struct Metadata metadata){
+int parseRoutingPacket(struct Packet packet, struct Metadata metadata){
     int numberOfRoutes = (packet.totalLength - HEADER_LENGTH) / (ADDR_LENGTH+2);
     debug_printf("routes in packet: %d\n", numberOfRoutes);
+
+    int n_entry = parseHelloPacket(packet, metadata);
 
     for( int i = 0 ; i < numberOfRoutes ; i++){
         struct RoutingTableEntry route; 
@@ -401,16 +449,24 @@ void parseRoutingPacket(struct Packet packet, struct Metadata metadata){
         memcpy(route.nextHop, packet.source, ADDR_LENGTH);
         route.distance = packet.data[(ADDR_LENGTH+2)*i + ADDR_LENGTH]; 
         route.distance++; // add a hop to distance
-        route.metric = packet.data[(ADDR_LENGTH+2)*i + ADDR_LENGTH+1];
+        float metric = (float) packet.data[(ADDR_LENGTH+2)*i + ADDR_LENGTH+1];
+
         int entry = checkRoutingTable(route);
         if(entry == -1){
             debug_printf("do nothing, already have route to ");
             printAddress(route.destination);
             debug_printf("\n");
         }else{
+            // average neighbor metric with rest of route metric
+            float hopRatio = 1/((float)route.distance);
+            metric = ((float) neighborTable[n_entry].metric)*(hopRatio) + ((float)route.metric)*(1-hopRatio);
+            route.metric = (uint8_t) metric;
+            //if(routeEntry <= 30){
             updateRouteTable(route, entry);
+            //}
         }
     }
+    return numberOfRoutes;
 }
 
 void parseChatPacket(struct Packet packet){
@@ -419,29 +475,19 @@ void parseChatPacket(struct Packet packet){
         Serial.printf("this message is for me %s\n", macaddr);
         return;
     }
-    int hasRoute = 0;
-    for( int i = 0 ; i < routeEntry ; i++){
-        if(memcmp(packet.destination, routeTable[i].destination, sizeof(packet.destination)) == 0){
-            hasRoute = i;
-        }
-    }
     uint8_t nextHop[ADDR_LENGTH];
     memcpy(nextHop, packet.data, sizeof(nextHop));
     if(memcmp(nextHop, mac, sizeof(nextHop)) == 0){
         Serial.printf("I am the next hop ");
-        if(hasRoute){
-            Serial.printf("and I have a route RETRANSMIT\n");
-            retransmitRoutedPacket(packet, routeTable[hasRoute]);
+        int entry = selectRoute(packet);
+        if(entry == -1){
+            Serial.printf(" but I don't have a route\n");
         }else{
-            Serial.printf("but I don't have a route\n");
+            Serial.printf(" and I have a route RETRANSMIT\n");
+            retransmitRoutedPacket(packet, routeTable[entry]);
         }
     }else{
-        Serial.printf("I am not the next hop ");
-        if(hasRoute){
-            Serial.printf("but I have a route\n");
-        }else{
-            Serial.printf("and I don't have a route\n");
-        }
+        Serial.printf("I am not the next hop, packet dropped\n");
     }
 }
     
@@ -456,10 +502,13 @@ int packet_received(char* data, size_t len) {
     // see https://github.com/sudomesh/disaster-radio-simulator/issues/3
     uint8_t packet_rssi = rand() % (256 - 128) + 128;
     uint8_t packet_snr = rand() % (256 - 128) + 128;
+    // articial packet loss
+    uint8_t packet_randomness = rand() % (256 - 128) + 128;
 
     struct Metadata metadata = {
         packet_rssi,
-        packet_snr
+        packet_snr,
+        packet_randomness
     };
     struct Packet packet = {
         byteData[0],
@@ -481,7 +530,7 @@ int packet_received(char* data, size_t len) {
             break;
         case 'r':
             // routing packet;
-            parseHelloPacket(packet, metadata);
+            //parseHelloPacket(packet, metadata);
             parseRoutingPacket(packet, metadata);
             //printRoutingTable();
             break;
@@ -553,7 +602,12 @@ void transmitRoutes(){
             lastRouteTime = time(NULL);
             return;
         }
-        for( int i = 0 ; i < routeEntry ; i++){
+        int routesPerPacket = routeEntry;
+        if (routeEntry >= MAX_ROUTES_PER_PACKET-1){
+            routesPerPacket = MAX_ROUTES_PER_PACKET-1;
+        }
+        // random select without replacement of routes
+        for( int i = 0 ; i < routesPerPacket ; i++){
             for( int j = 0 ; j < ADDR_LENGTH ; j++){
                 data[dataLength] = routeTable[i].destination[j];
                 dataLength++;
@@ -676,8 +730,6 @@ int setup() {
     lastRouteTime = time(NULL);
     _learningTimeout += wait;
 
-    randomMetric = rand()%255;
-        
     chance=rand()%5;
     if(chance == 3){
         Serial.printf("I shall send a random message\n");
@@ -690,7 +742,7 @@ int state = 0;
 int loop() {
 
     if(!begin_packet()){
-        debug_printf("transmit in progress please wait");
+        //debug_printf("transmit in progress please wait");
     }else{
         if(state == 0){
             Serial.printf("learning... %d\r", time(NULL) - startTime);
