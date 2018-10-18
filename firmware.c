@@ -130,7 +130,7 @@ int sendPacket(struct Packet packet) {
     //if(!loraInitialized){
     //    return;
     //}
-    uint8_t* sending = malloc(sizeof(packet));
+    uint8_t* sending = (uint8_t*) malloc(sizeof(packet));
     memcpy(sending, &packet, sizeof(packet));
     if(hashingEnabled){
         // do not send message if already transmitted once
@@ -553,7 +553,7 @@ int packet_received(char* data, size_t len) {
 struct Packet buildPacket( uint8_t ttl, uint8_t dest[6], uint8_t type, uint8_t data[240], uint8_t dataLength){
 
     uint8_t packetLength = HEADER_LENGTH + dataLength;
-    uint8_t* buffer = malloc(dataLength);
+    uint8_t* buffer = (uint8_t*)  malloc(dataLength);
     buffer = (uint8_t*) data;
     struct Packet packet = {
         ttl,
@@ -571,14 +571,12 @@ long lastHelloTime = 0;
 void transmitHello(){
 
     if (time(NULL) - lastHelloTime > helloInterval()) {
-        char data[240];
-        char message[10] = "Hola from\0";
-        sprintf(data, "%s %s", message, macaddr);
-        int dataLength = 22;
+        uint8_t data[240] = "Hola";
+        int dataLength = 4;
         //TODO: add randomness to message to avoid hashisng issues
         uint8_t destination[6] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
         struct Packet helloMessage = buildPacket(1, destination, 'h', data, dataLength); 
-        uint8_t* sending = malloc(sizeof(helloMessage));
+        uint8_t* sending = (uint8_t*)  malloc(sizeof(helloMessage));
         memcpy(sending, &helloMessage, sizeof(helloMessage));
         send_packet(sending, helloMessage.totalLength);
         messageCount++;
@@ -624,7 +622,7 @@ void transmitRoutes(){
         debug_printf("\n");
         uint8_t destination[6] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
         struct Packet routeMessage = buildPacket(1, destination, 'r', data, dataLength); 
-        uint8_t* sending = malloc(sizeof(routeMessage));
+        uint8_t* sending = (uint8_t*) malloc(sizeof(routeMessage));
         memcpy(sending, &routeMessage, sizeof(routeMessage));
         send_packet(sending, routeMessage.totalLength);
         messageCount++;
@@ -668,7 +666,7 @@ void transmitToRandomRoute(){
             dataLength++;
         }
         struct Packet randomMessage = buildPacket(32, destination, 'c', data, dataLength); 
-        uint8_t* sending = malloc(sizeof(randomMessage));
+        uint8_t* sending = (uint8_t*)  malloc(sizeof(randomMessage));
         memcpy(sending, &randomMessage, sizeof(randomMessage));
         send_packet(sending, randomMessage.totalLength);
         messageCount++;
@@ -729,6 +727,7 @@ int setup() {
     lastHelloTime = time(NULL);
     lastRouteTime = time(NULL);
     _learningTimeout += wait;
+    _discoveryTimeout += wait;
 
     chance=rand()%5;
     if(chance == 3){
