@@ -11,7 +11,6 @@
 #define ADDR_LENGTH 6 
 #define MAX_ROUTES_PER_PACKET 30
 
-uint8_t mac[ADDR_LENGTH];
 char macaddr[ADDR_LENGTH*2];
 
 // global sequence number
@@ -26,7 +25,7 @@ int _helloInterval = 10;
 int _routeInterval = 10;
 int _messageInterval = 5;
 int _discoveryTimeout = 30;
-int _learningTimeout = 400;
+int _learningTimeout = 200;
 int _maxRandomDelay = 20;
 
 int simulationTime(int realTime) {
@@ -430,9 +429,7 @@ int parseHelloPacket(struct Packet packet, struct Metadata metadata){
         printAddress(route.destination);
         debug_printf("\n");
     }else{
-        //if(routeEntry <= 30){
         updateRouteTable(route, r_entry);
-        //}
     }
     return n_entry;
 }
@@ -635,6 +632,7 @@ void transmitRoutes(){
     }
 }
 
+int choose = 0;
 long lastMessageTime = 0;
 void transmitToRandomRoute(){
 
@@ -645,7 +643,10 @@ void transmitToRandomRoute(){
             lastMessageTime = time(NULL);
             return;
         }
-        int choose = rand()%routeEntry;
+        choose++;
+        if(choose <= routeEntry){
+            choose = 0;
+        }
         uint8_t destination[ADDR_LENGTH];
         memcpy(destination, &routeTable[choose].destination, sizeof(destination));
 
@@ -682,13 +683,9 @@ void transmitToRandomRoute(){
 void wifiSetup(){
 
     //WiFi.macAddress(mac);
-    // generate random mac address
-    srand(time(NULL) + getpid());
-    for (int i = 0; i < ADDR_LENGTH ; i++){
-        mac[i] = rand()%256;
-    }
-    // MAC address comes in backwards on ESP8266
-    // reverse mac array
+    getMacAddress();
+    /*
+    //reverse mac address ESP-specific
     uint8_t tmp;
     int start = 0;
     int end = ADDR_LENGTH-1;
@@ -700,6 +697,7 @@ void wifiSetup(){
         start++; 
         end--; 
     }    
+    */
     sprintf(macaddr, "%02x%02x%02x%02x%02x%02x\0", mac[0], mac[1], mac[2], mac[3], mac[4], mac [5]);
     debug_printf("%s\n", macaddr);
     //strcat(ssid, macaddr);

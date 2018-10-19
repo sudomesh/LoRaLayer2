@@ -18,6 +18,8 @@ int debug_printf(const char* format, ...);
 
 int begin_packet();
 
+int getMacAddress();
+
 int send_packet(char* data, uint8_t len);
 
 int nsleep(unsigned int secs, useconds_t usecs);
@@ -25,6 +27,10 @@ int nsleep(unsigned int secs, useconds_t usecs);
 int transmitting;
 
 float timeDistortion;
+
+char* macString;
+
+uint8_t mac[6];
 
 // you must declare these in your router
 int setup(); // called once on startup

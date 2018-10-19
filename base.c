@@ -69,6 +69,35 @@ int print_err(const char* format, ...) {
   return ret;
 }
 
+uint8_t hex_digit(char ch){
+  if(( '0' <= ch ) && ( ch <= '9' )){
+    ch -= '0';
+  }else{
+    if(( 'a' <= ch ) && ( ch <= 'f' )){
+      ch += 10 - 'a';
+    }else{
+      if(( 'A' <= ch ) && ( ch <= 'F' ) ){
+        ch += 10 - 'A';
+      }else{
+        ch = 16;
+      }
+    }
+  }
+  return ch;
+}
+
+int getMacAddress(){
+  for( int i = 0; i < sizeof(mac)/sizeof(mac[0]); ++i ){
+    mac[i]  = hex_digit( macString[2*i] ) << 4;
+    mac[i] |= hex_digit( macString[2*i+1] );
+  }
+  if(mac){
+    return 1;
+  }else{
+    return 0;
+  }
+}
+
 int begin_packet(){
     if(transmitting == 1){
         // transmission in progress, do not begin packet
@@ -135,9 +164,14 @@ int main(int argc, char **argv) {
   timeDistortion = 1;
 
   int opt;
-  while ((opt = getopt(argc, argv, "t:")) != -1) {
+  while ((opt = getopt(argc, argv, "t:a:")) != -1) {
     switch (opt) {
-      case 't': timeDistortion = strtod(optarg, NULL); break;
+      case 't':
+        timeDistortion = strtod(optarg, NULL);
+        break;
+      case 'a':
+        macString = optarg;
+        break;
       default:
         perror("Bad args\n");
         return 1;
