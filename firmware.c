@@ -643,14 +643,10 @@ void transmitToRandomRoute(){
             lastMessageTime = time(NULL);
             return;
         }
-        choose++;
-        if(choose <= routeEntry){
-            choose = 0;
-        }
         uint8_t destination[ADDR_LENGTH];
         memcpy(destination, &routeTable[choose].destination, sizeof(destination));
 
-        Serial.printf("trying to send a random message from %s to ", macaddr);
+        Serial.printf("route %d: trying to send a random message from %s to ", choose, macaddr);
         for( int j = 0 ; j < ADDR_LENGTH ; j++){
             Serial.printf("%02x", routeTable[choose].destination[j]);
         }
@@ -671,6 +667,10 @@ void transmitToRandomRoute(){
         memcpy(sending, &randomMessage, sizeof(randomMessage));
         send_packet(sending, randomMessage.totalLength);
         messageCount++;
+        choose++;
+        if(choose == routeEntry){
+            choose = 0;
+        }
         lastMessageTime = time(NULL);
         Serial.printf("Sending a message: ");
         for(int i = 0 ; i < randomMessage.totalLength ; i++){
@@ -716,6 +716,7 @@ int setup() {
 
     wifiSetup();
 
+    srand(time(NULL) + getpid());
     // random wait at boot
     int wait = rand()%maxRandomDelay();
     Serial.printf("waiting %d s\n", wait);
