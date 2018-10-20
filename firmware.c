@@ -131,6 +131,7 @@ int sendPacket(struct Packet packet) {
     //}
     uint8_t* sending = (uint8_t*) malloc(sizeof(packet));
     memcpy(sending, &packet, sizeof(packet));
+    /*
     if(hashingEnabled){
         // do not send message if already transmitted once
         uint8_t hash[SHA1_LENGTH];
@@ -140,6 +141,9 @@ int sendPacket(struct Packet packet) {
             messageCount++;
         }
     }
+    */
+    send_packet(sending, packet.totalLength);
+    messageCount++;
     return messageCount;
     /*
     LoRa.beginPacket();
@@ -179,6 +183,23 @@ void checkBuffer(){
         sendPacket(packet);
     }
     //else buffer is empty;
+}
+
+struct Packet buildPacket( uint8_t ttl, uint8_t dest[6], uint8_t type, uint8_t data[240], uint8_t dataLength){
+
+    uint8_t packetLength = HEADER_LENGTH + dataLength;
+    uint8_t* buffer = (uint8_t*)  malloc(dataLength);
+    buffer = (uint8_t*) data;
+    struct Packet packet = {
+        ttl,
+        packetLength,
+        mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],
+        dest[0], dest[1], dest[2], dest[3], dest[4], dest[5],
+        messageCount,
+        type 
+    };
+    memcpy(&packet.data, buffer, packet.totalLength);
+    return packet;
 }
 
 void printPacketInfo(struct Packet packet, struct Metadata metadata){
@@ -243,7 +264,7 @@ void printRoutingTable(){
 
 void printAddress(uint8_t address[ADDR_LENGTH]){
     for( int i = 0 ; i < ADDR_LENGTH; i++){
-        debug_printf("%02x", address[i]);
+        Serial.printf("%02x", address[i]);
     }
 }
 
@@ -314,7 +335,7 @@ int checkRoutingTable(struct RoutingTableEntry route){
                 }else 
                 if(route.distance == routeTable[i].distance){
                     // keep route if distance is the same as an existing 
-                    entry = routeEntry;
+                    entry = -1;//routeEntry;
                 }else{
                     // ignore route if its distance is worse
                     entry = -1;
@@ -361,19 +382,24 @@ int updateRouteTable(struct RoutingTableEntry route, int entry){
 }
 
 int selectRoute(struct Packet packet){
-    int* possibleRoute;
-    int count = 0;
+    //int* possibleRoute;
+    //int count = 0;
+    int entry = -1;
     for( int i = 0 ; i < routeEntry ; i++){
         if(memcmp(packet.destination, routeTable[i].destination, sizeof(packet.destination)) == 0){
-            possibleRoute[count] = i;
-            count++;
+            entry = i;
+            //possibleRoute[count] = i;
+            //count++;
         }
     }
-    int entry = -1;
+    return entry;
+    /*
     if(count == 0){
         // node has no routes
         return entry;
-    }else
+    }else{
+        return entry;
+    }
     if(count == 1){
         // node have only one known route
         entry = possibleRoute[0];
@@ -382,28 +408,37 @@ int selectRoute(struct Packet packet){
     if(count >= 2){
         entry  = 0;
         for(int i = 1 ; i < count ; i++){
-            if(routeTable[possibleRoute[i]].metric > routeTable[entry].metric){
+            if(routeTable[possibleRoute[i]].metric >= routeTable[entry].metric){
                 entry = possibleRoute[i];
             }
         }
         return entry;
     }
+    */
 }
 
 void retransmitRoutedPacket(struct Packet packet, struct RoutingTableEntry route){
 
-    struct RoutedMessage oldMessage;
-    struct RoutedMessage newMessage;
-    memcpy(&oldMessage, packet.data, sizeof(oldMessage));
-    memcpy(newMessage.nextHop, route.nextHop, sizeof(newMessage.nextHop));
-    memcpy(newMessage.data, oldMessage.data, sizeof(newMessage.data));
+    //struct RoutedMessage oldMessage;
+    //struct RoutedMessage newMessage;
+    //memcpy(&oldMessage, packet.data, sizeof(oldMessage));
+    //memcpy(newMessage.nextHop, route.nextHop, sizeof(newMessage.nextHop));
+    //memcpy(newMessage.data, oldMessage.data, sizeof(newMessage.data));
 
     // decrement ttl
-    packet.ttl--;
-    memcpy(packet.data, &newMessage, sizeof(packet.data));
+    //packet.ttl--;
+    Serial.printf("trying to retransmit\n");
+    uint8_t data[240];
+    int dataLength = 0;
+    for( int i = 0 ; i < ADDR_LENGTH ; i++){
+        data[dataLength] = route.nextHop[i];
+        dataLength++;
+    }
+    struct Packet newMessage = buildPacket(packet.ttl, packet.destination, packet.type, data, dataLength); 
+    //memcpy(packet.data, route.nextHop, sizeof(packet.data));
 
     // queue packet to be transmitted
-    pushToBuffer(packet);
+    pushToBuffer(newMessage);
 }
 
 int parseHelloPacket(struct Packet packet, struct Metadata metadata){
@@ -436,11 +471,11 @@ int parseHelloPacket(struct Packet packet, struct Metadata metadata){
 
 int parseRoutingPacket(struct Packet packet, struct Metadata metadata){
     int numberOfRoutes = (packet.totalLength - HEADER_LENGTH) / (ADDR_LENGTH+2);
-    debug_printf("routes in packet: %d\n", numberOfRoutes);
+    Serial.printf("routes in packet: %d\n", numberOfRoutes);
 
     int n_entry = parseHelloPacket(packet, metadata);
 
-    for( int i = 0 ; i < numberOfRoutes ; i++){
+    for( int i = 0 ; i < numberOfRoutes ; i++ ){
         struct RoutingTableEntry route; 
         memcpy(route.destination, packet.data + (ADDR_LENGTH+2)*i, ADDR_LENGTH);
         memcpy(route.nextHop, packet.source, ADDR_LENGTH);
@@ -450,9 +485,9 @@ int parseRoutingPacket(struct Packet packet, struct Metadata metadata){
 
         int entry = checkRoutingTable(route);
         if(entry == -1){
-            debug_printf("do nothing, already have route to ");
+            Serial.printf("do nothing, already have route to ");
             printAddress(route.destination);
-            debug_printf("\n");
+            Serial.printf("\n");
         }else{
             // average neighbor metric with rest of route metric
             float hopRatio = 1/((float)route.distance);
@@ -475,16 +510,18 @@ void parseChatPacket(struct Packet packet){
     uint8_t nextHop[ADDR_LENGTH];
     memcpy(nextHop, packet.data, sizeof(nextHop));
     if(memcmp(nextHop, mac, sizeof(nextHop)) == 0){
-        Serial.printf("I am the next hop ");
+        //Serial.printf("I am the next hop ");
         int entry = selectRoute(packet);
         if(entry == -1){
-            Serial.printf(" but I don't have a route\n");
+            //Serial.printf(" but I don't have a route\n");
+            return;
         }else{
-            Serial.printf(" and I have a route RETRANSMIT\n");
+            //Serial.printf(" and I have a route RETRANSMIT\n");
             retransmitRoutedPacket(packet, routeTable[entry]);
         }
     }else{
-        Serial.printf("I am not the next hop, packet dropped\n");
+        return;
+        //Serial.printf("I am not the next hop, packet dropped\n");
     }
 }
     
@@ -547,22 +584,6 @@ int packet_received(char* data, size_t len) {
 }
 
 
-struct Packet buildPacket( uint8_t ttl, uint8_t dest[6], uint8_t type, uint8_t data[240], uint8_t dataLength){
-
-    uint8_t packetLength = HEADER_LENGTH + dataLength;
-    uint8_t* buffer = (uint8_t*)  malloc(dataLength);
-    buffer = (uint8_t*) data;
-    struct Packet packet = {
-        ttl,
-        packetLength,
-        mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],
-        dest[0], dest[1], dest[2], dest[3], dest[4], dest[5],
-        messageCount,
-        type 
-    };
-    memcpy(&packet.data, buffer, packet.totalLength);
-    return packet;
-}
 
 long lastHelloTime = 0;
 void transmitHello(){
@@ -728,8 +749,8 @@ int setup() {
     _learningTimeout += wait;
     _discoveryTimeout += wait;
 
-    chance=rand()%5;
-    if(chance == 3){
+    chance=rand()%15;
+    if(chance == 1){
         Serial.printf("I shall send a random message\n");
     }
 
@@ -766,7 +787,7 @@ int loop() {
             }
         }else if(state == 2){
             checkBuffer(); 
-            if(chance == 3){
+            if(chance == 1){
                 transmitToRandomRoute();        
             }
         }
