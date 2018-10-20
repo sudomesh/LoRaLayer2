@@ -28,6 +28,8 @@ int transmitting;
 
 float timeDistortion;
 
+char* nodeID;
+
 char* macString;
 
 uint8_t mac[6];

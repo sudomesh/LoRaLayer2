@@ -164,13 +164,16 @@ int main(int argc, char **argv) {
   timeDistortion = 1;
 
   int opt;
-  while ((opt = getopt(argc, argv, "t:a:")) != -1) {
+  while ((opt = getopt(argc, argv, "t:a:n:")) != -1) {
     switch (opt) {
       case 't':
         timeDistortion = strtod(optarg, NULL);
         break;
       case 'a':
         macString = optarg;
+        break;
+      case 'n':
+        nodeID = optarg;
         break;
       default:
         perror("Bad args\n");
