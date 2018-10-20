@@ -18,7 +18,7 @@ uint8_t messageCount = 0;
 
 // mode switches
 int retransmitEnabled = 0;
-int hashingEnabled = 1;
+int hashingEnabled = 0;
 
 // timeout intervals
 int _helloInterval = 10;
@@ -131,7 +131,6 @@ int sendPacket(struct Packet packet) {
     //}
     uint8_t* sending = (uint8_t*) malloc(sizeof(packet));
     memcpy(sending, &packet, sizeof(packet));
-    /*
     if(hashingEnabled){
         // do not send message if already transmitted once
         uint8_t hash[SHA1_LENGTH];
@@ -140,10 +139,10 @@ int sendPacket(struct Packet packet) {
             send_packet(sending, packet.totalLength);
             messageCount++;
         }
+    }else{
+        send_packet(sending, packet.totalLength);
+        messageCount++;
     }
-    */
-    send_packet(sending, packet.totalLength);
-    messageCount++;
     return messageCount;
     /*
     LoRa.beginPacket();
@@ -322,6 +321,12 @@ int checkRoutingTable(struct RoutingTableEntry route){
 
     int entry = routeEntry; // assume this is a new route
     for( int i = 0 ; i < routeEntry ; i++){
+        if(memcmp(route.destination, mac, sizeof(route.destination)) == 0){
+            //this is me don't add to routing table 
+            //debug_printf("this route is my local address\n");
+            entry = -1;
+            return entry;
+        }else 
         if(memcmp(route.destination, routeTable[i].destination, sizeof(route.destination)) == 0){
             if(memcmp(route.nextHop, routeTable[i].nextHop, sizeof(route.nextHop)) == 0){
                 // already have this exact route, update metric
@@ -334,20 +339,18 @@ int checkRoutingTable(struct RoutingTableEntry route){
                     entry = i;
                 }else 
                 if(route.distance == routeTable[i].distance){
-                    // keep route if distance is the same as an existing 
-                    entry = -1;//routeEntry;
+                    if(route.metric > routeTable[i].metric){
+                    // replace route if distance is equal and metric is better 
+                        entry = i;
+                    }else{
+                        entry = -1;
+                    }
                 }else{
-                    // ignore route if its distance is worse
+                    // ignore route if distance and metric are worse
                     entry = -1;
                 }
                 return entry;
             }
-        }else 
-        if(memcmp(route.destination, mac, sizeof(route.destination)) == 0){
-            //this is me don't add to routing table 
-            //debug_printf("this route is my local address\n");
-            entry = -1;
-            return entry;
         } 
     }
     return entry;
@@ -384,39 +387,14 @@ int updateRouteTable(struct RoutingTableEntry route, int entry){
 }
 
 int selectRoute(struct Packet packet){
-    //int* possibleRoute;
-    //int count = 0;
+
     int entry = -1;
     for( int i = 0 ; i < routeEntry ; i++){
         if(memcmp(packet.destination, routeTable[i].destination, sizeof(packet.destination)) == 0){
             entry = i;
-            //possibleRoute[count] = i;
-            //count++;
         }
     }
     return entry;
-    /*
-    if(count == 0){
-        // node has no routes
-        return entry;
-    }else{
-        return entry;
-    }
-    if(count == 1){
-        // node have only one known route
-        entry = possibleRoute[0];
-        return entry;
-    }else
-    if(count >= 2){
-        entry  = 0;
-        for(int i = 1 ; i < count ; i++){
-            if(routeTable[possibleRoute[i]].metric >= routeTable[entry].metric){
-                entry = possibleRoute[i];
-            }
-        }
-        return entry;
-    }
-    */
 }
 
 void retransmitRoutedPacket(struct Packet packet, struct RoutingTableEntry route){
