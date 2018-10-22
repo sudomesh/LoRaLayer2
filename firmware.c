@@ -676,7 +676,6 @@ void transmitToRandomRoute(){
 void wifiSetup(){
 
     //WiFi.macAddress(mac);
-    getMacAddress();
     /*
     //reverse mac address ESP-specific
     uint8_t tmp;

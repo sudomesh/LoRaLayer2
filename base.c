@@ -86,7 +86,7 @@ uint8_t hex_digit(char ch){
   return ch;
 }
 
-int getMacAddress(){
+int setMacAddress(char* macString){
   for( int i = 0; i < sizeof(mac)/sizeof(mac[0]); ++i ){
     mac[i]  = hex_digit( macString[2*i] ) << 4;
     mac[i] |= hex_digit( macString[2*i+1] );
@@ -170,7 +170,7 @@ int main(int argc, char **argv) {
         timeDistortion = strtod(optarg, NULL);
         break;
       case 'a':
-        macString = optarg;
+        setMacAddress(optarg);
         break;
       case 'n':
         nodeID = optarg;

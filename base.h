@@ -18,7 +18,7 @@ int debug_printf(const char* format, ...);
 
 int begin_packet();
 
-int getMacAddress();
+int setMacAddress();
 
 int send_packet(char* data, uint8_t len);
 
@@ -29,8 +29,6 @@ int transmitting;
 float timeDistortion;
 
 char* nodeID;
-
-char* macString;
 
 uint8_t mac[6];
 
