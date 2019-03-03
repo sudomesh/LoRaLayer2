@@ -9,9 +9,21 @@
 #include <fcntl.h>
 #include <stdarg.h>
 #include <string.h>
-#include "base.h"
+#include <time.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <openssl/sha.h>
+#include "Layer1_Sim.h"
+#include "LoRaLayer2.h"
 
 struct timeval to_sleep;
+int transmitting = 0;
+uint8_t _localAddress[ADDR_LENGTH];
+char* nodeID;
+uint8_t hashTable[256][SHA1_LENGTH];
+uint8_t hashEntry = 0;
+float _timeDistortion = 1;
+serial Serial;
 
 // from https://www.gnu.org/software/libc/manual/html_node/Elapsed-Time.html
 int timeval_subtract(struct timeval *result, struct timeval *x, struct timeval *y) {
@@ -42,6 +54,48 @@ int nsleep(unsigned int secs, useconds_t usecs) {
   to_sleep.tv_usec = usecs;
   
   return 0;
+}
+
+// 1 second in the simulation == 1 second in real life * timeDistortion
+int setTimeDistortion(float newDistortion){
+    _timeDistortion = newDistortion;
+	return 0;
+}
+
+float timeDistortion(){
+    return _timeDistortion;
+}
+
+int simulationTime(int realTime){
+    return realTime * timeDistortion();
+}
+
+
+int getTime(){
+    return time(NULL);
+}
+
+int isHashNew(uint8_t hash[SHA1_LENGTH]){
+    int hashNew = 1;
+    Serial.printf("hash is %x\n", hash);
+    for( int i = 0 ; i <= hashEntry ; i++){
+        /*
+        if(strcmp(hash, hashTable[i]) == 0){
+            hashNew = 0; 
+            Serial.printf("Not new!\n");
+        }
+        */
+    }
+    if(hashNew){
+        // add to hash table
+        Serial.printf("New message received");
+        Serial.printf("\r\n");
+        for( int i = 0 ; i < SHA1_LENGTH ; i++){
+            hashTable[hashEntry][i] = hash[i];
+        }
+        hashEntry++;
+    }
+    return hashNew;
 }
 
 int debug_printf(const char* format, ...) {
@@ -86,16 +140,20 @@ uint8_t hex_digit(char ch){
   return ch;
 }
 
-int setMacAddress(char* macString){
-  for( int i = 0; i < sizeof(mac)/sizeof(mac[0]); ++i ){
-    mac[i]  = hex_digit( macString[2*i] ) << 4;
-    mac[i] |= hex_digit( macString[2*i+1] );
+int setLocalAddress(char* macString){
+  for( int i = 0; i < sizeof(_localAddress)/sizeof(_localAddress[0]); ++i ){
+    _localAddress[i]  = hex_digit( macString[2*i] ) << 4;
+    _localAddress[i] |= hex_digit( macString[2*i+1] );
   }
-  if(mac){
+  if(_localAddress){
     return 1;
   }else{
     return 0;
   }
+}
+
+uint8_t* localAddress(){
+    return _localAddress;
 }
 
 int begin_packet(){
@@ -119,8 +177,7 @@ int parse_metadata(char* data, uint8_t len){
             }
             break;
         case 'd':
-            timeDistortion = strtod((data + 1), NULL);
-            debug_printf("new time distortion %f", timeDistortion);
+            setTimeDistortion(strtod((data + 1), NULL));
             break;
         default:
             perror("invalid metadata");
@@ -160,17 +217,14 @@ int send_packet(char* data, uint8_t len) {
 
 int main(int argc, char **argv) {
 
-  // 1 second in the simulation == 1 second in real life * timeDistortion
-  timeDistortion = 1;
-
   int opt;
   while ((opt = getopt(argc, argv, "t:a:n:")) != -1) {
     switch (opt) {
       case 't':
-        timeDistortion = strtod(optarg, NULL);
+        setTimeDistortion(strtod(optarg, NULL));
         break;
       case 'a':
-        setMacAddress(optarg);
+        setLocalAddress(optarg);
         break;
       case 'n':
         nodeID = optarg;
@@ -274,7 +328,7 @@ int main(int argc, char **argv) {
           return ret;
         }
       }
-      else if(ret = packet_received(buffer, len)) {
+      else if(ret = packet_received(buffer, len)){
         return ret;
       }
       meta = 0;

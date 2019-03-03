@@ -1,159 +1,62 @@
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdint.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <stdarg.h>
 #include <string.h>
-#include <time.h>
-#include <openssl/sha.h>
-#include "base.h"
+#include "LoRaLayer2.h"
 
-#define HEADER_LENGTH 16
-#define SHA1_LENGTH 40
-#define ADDR_LENGTH 6 
-#define MAX_ROUTES_PER_PACKET 30
+#ifdef LORA
+// physical layer is a lora transciever 
+#include "Layer1_LoRa.h"
+#endif
 
-char macaddr[ADDR_LENGTH*2];
+#ifdef SIM
+// physical layer is a simulated network
+#include "Layer1_Sim.h"
+#endif
 
-// global sequence number
-uint8_t messageCount = 0;
+uint8_t _messageCount;
 
-// mode switches
-int retransmitEnabled = 0;
-int hashingEnabled = 0;
-
-// timeout intervals
-int _helloInterval = 10;
-int _routeInterval = 10;
-int _messageInterval = 5;
-int _discoveryTimeout = 30;
-int _learningTimeout = 200;
-int _maxRandomDelay = 20;
-
-int simulationTime(int realTime) {
-    return realTime * timeDistortion;
-}
-int helloInterval() {
-    return simulationTime(_helloInterval);
-}
-int routeInterval() {
-    return simulationTime(_routeInterval);
-}
-int messageInterval() {
-    return simulationTime(_messageInterval);
-}
-int discoveryTimeout() {
-    return simulationTime(_discoveryTimeout);
-}
-int learningTimeout() {
-    return simulationTime(_learningTimeout);
-}
-int maxRandomDelay() {
-    return simulationTime(_maxRandomDelay);
-}
-
-// metric variables
+// metric weights
 float packetSuccessWeight = .8;
-//float RSSIWeight = .3;
-//float SNRWeight = .3;
 float randomMetricWeight = .2;
 
-// packet structures
-struct Metadata {
-    uint8_t rssi;
-    uint8_t snr;
-    uint8_t randomness;
-};
-struct Packet {
-    uint8_t ttl;
-    uint8_t totalLength;
-    uint8_t source[ADDR_LENGTH];
-    uint8_t destination[ADDR_LENGTH];
-    uint8_t sequence;
-    uint8_t type;
-    uint8_t data[240];
-};
-struct RoutedMessage {
-    uint8_t nextHop[6];
-    uint8_t data[234];
-};
-
+// tables and buffers
 struct Packet buffer[8];
 int bufferEntry = 0;
 
-// table structures
-uint8_t hashTable[256][SHA1_LENGTH];
-uint8_t hashEntry = 0;
-
-struct NeighborTableEntry{
-    uint8_t address[ADDR_LENGTH];
-    uint8_t lastReceived;
-    uint8_t packet_success;
-    uint8_t metric;
-};
 struct NeighborTableEntry neighborTable[255];
 int neighborEntry = 0;
 
-struct RoutingTableEntry{
-    uint8_t destination[ADDR_LENGTH];
-    uint8_t nextHop[ADDR_LENGTH];
-    uint8_t distance;
-    uint8_t lastReceived;
-    uint8_t metric;
-};
 struct RoutingTableEntry routeTable[255];
 int routeEntry = 0;
 
-int isHashNew(uint8_t hash[SHA1_LENGTH]){
-
-    int hashNew = 1;
-    Serial.printf("hash is %x\n", hash);
-    for( int i = 0 ; i <= hashEntry ; i++){
-        if(strcmp(hash, hashTable[i]) == 0){
-            hashNew = 0; 
-            Serial.printf("Not new!\n");
-        }
-    }
-    if(hashNew){
-        // add to hash table
-        Serial.printf("New message received");
-        Serial.printf("\r\n");
-        for( int i = 0 ; i < SHA1_LENGTH ; i++){
-            hashTable[hashEntry][i] = hash[i];
-        }
-        hashEntry++;
-    }
-    return hashNew;
+uint8_t messageCount(){
+    return _messageCount;
 }
 
 int sendPacket(struct Packet packet) {
 
-    //if(!loraInitialized){
-    //    return;
-    //}
     uint8_t* sending = (uint8_t*) malloc(sizeof(packet));
     memcpy(sending, &packet, sizeof(packet));
+    /*
+    int send = 1;
     if(hashingEnabled){
         // do not send message if already transmitted once
-        uint8_t hash[SHA1_LENGTH];
-        SHA1(sending, packet.totalLength, hash);
-        if(isHashNew(hash)){
-            send_packet(sending, packet.totalLength);
-            messageCount++;
-        }
-    }else{
-        send_packet(sending, packet.totalLength);
-        messageCount++;
+        //uint8_t hash[SHA1_LENGTH];
+        //SHA1(sending, packet.totalLength, hash);
+        //if(isHashNew(hash)){
+        //  send = 0;
+        //}
     }
-    return messageCount;
-    /*
-    LoRa.beginPacket();
-    for( int i = 0 ; i < outgoingLength ; i++){
-        LoRa.write(outgoing[i]);
-        Serial.printf("%c", outgoing[i]);
-    }
-    Serial.printf("\r\n");
-    LoRa.endPacket();
-    LoRa.receive();
     */
+    send_packet((char*) sending, packet.totalLength);
+    _messageCount++;
+    return _messageCount;
 }
 
 void pushToBuffer(struct Packet packet){
@@ -201,31 +104,33 @@ struct Packet buildPacket( uint8_t ttl, uint8_t src[6], uint8_t dest[6], uint8_t
     return packet;
 }
 
-void printPacketInfo(struct Packet packet, struct Metadata metadata){
-
-    Serial.printf("\n");
-    Serial.printf("Packet Received: \n");
+void printMetadata(struct Metadata metadata){
     Serial.printf("RSSI: %x\n", metadata.rssi);
     Serial.printf("SNR: %x\n", metadata.snr);
-    Serial.printf("ttl: %d\n", packet.ttl);
-    Serial.printf("length: %d\n", packet.totalLength);
+}
+
+void printPacketInfo(struct Packet packet){
+
+    Serial.printf("\r\n");
+    Serial.printf("ttl: %d\r\n", packet.ttl);
+    Serial.printf("length: %d\r\n", packet.totalLength);
     Serial.printf("source: ");
     for(int i = 0 ; i < ADDR_LENGTH ; i++){
         Serial.printf("%x", packet.source[i]);
     }
-    Serial.printf("\n");
+    Serial.printf("\r\n");
     Serial.printf("destination: ");
     for(int i = 0 ; i < ADDR_LENGTH ; i++){
         Serial.printf("%x", packet.destination[i]);
     }
-    Serial.printf("\n");
-    Serial.printf("sequence: %02x\n", packet.sequence);
-    Serial.printf("type: %c\n", packet.type);
+    Serial.printf("\r\n");
+    Serial.printf("sequence: %02x\r\n", packet.sequence);
+    Serial.printf("type: %c\r\n", packet.type);
     Serial.printf("data: ");
     for(int i = 0 ; i < packet.totalLength-HEADER_LENGTH ; i++){
         Serial.printf("%02x", packet.data[i]);
     }
-    Serial.printf("\n");
+    Serial.printf("\r\n");
 }
 
 void printNeighborTable(){
@@ -321,7 +226,7 @@ int checkRoutingTable(struct RoutingTableEntry route){
 
     int entry = routeEntry; // assume this is a new route
     for( int i = 0 ; i < routeEntry ; i++){
-        if(memcmp(route.destination, mac, sizeof(route.destination)) == 0){
+        if(memcmp(route.destination, localAddress(), sizeof(route.destination)) == 0){
             //this is me don't add to routing table 
             //debug_printf("this route is my local address\n");
             entry = -1;
@@ -379,9 +284,7 @@ int updateRouteTable(struct RoutingTableEntry route, int entry){
     }else{
         debug_printf("route updated! ");
     }
-    if(DEBUG){
-        printAddress(routeTable[entry].destination);
-    }
+    printAddress(routeTable[entry].destination);
     debug_printf("\n");
     return entry;
 }
@@ -401,7 +304,7 @@ void retransmitRoutedPacket(struct Packet packet, struct RoutingTableEntry route
 
     // decrement ttl
     packet.ttl--;
-    Serial.printf("node %s: retransmitting\n", nodeID);
+    Serial.printf("retransmitting\n");
     uint8_t data[240];
     int dataLength = 0;
     for( int i = 0 ; i < ADDR_LENGTH ; i++){
@@ -434,12 +337,12 @@ int parseHelloPacket(struct Packet packet, struct Metadata metadata){
     int r_entry = checkRoutingTable(route);
     if(r_entry == -1){
         debug_printf("do nothing, already have better route to ");
-        if(DEBUG){
-            printAddress(route.destination);
-        }
+        printAddress(route.destination);
         debug_printf("\n");
     }else{
+        //if(routeEntry <= 30){
         updateRouteTable(route, r_entry);
+        //}
     }
     return n_entry;
 }
@@ -450,7 +353,7 @@ int parseRoutingPacket(struct Packet packet, struct Metadata metadata){
 
     int n_entry = parseHelloPacket(packet, metadata);
 
-    for( int i = 0 ; i < numberOfRoutes ; i++ ){
+    for( int i = 0 ; i < numberOfRoutes ; i++){
         struct RoutingTableEntry route; 
         memcpy(route.destination, packet.data + (ADDR_LENGTH+2)*i, ADDR_LENGTH);
         memcpy(route.nextHop, packet.source, ADDR_LENGTH);
@@ -461,9 +364,7 @@ int parseRoutingPacket(struct Packet packet, struct Metadata metadata){
         int entry = checkRoutingTable(route);
         if(entry == -1){
             debug_printf("do nothing, already have route to ");
-            if(DEBUG){
-                printAddress(route.destination);
-            }
+            printAddress(route.destination);
             debug_printf("\n");
         }else{
             // average neighbor metric with rest of route metric
@@ -480,25 +381,23 @@ int parseRoutingPacket(struct Packet packet, struct Metadata metadata){
 
 void parseChatPacket(struct Packet packet){
     
-    if(memcmp(packet.destination, mac, sizeof(packet.destination)) == 0){
-        Serial.printf("Message received by node %s\n", nodeID);
+    if(memcmp(packet.destination, localAddress(), sizeof(packet.destination)) == 0){
+        Serial.printf("this message is for me\n");
         return;
     }
     uint8_t nextHop[ADDR_LENGTH];
     memcpy(nextHop, packet.data, sizeof(nextHop));
-    if(memcmp(nextHop, mac, sizeof(nextHop)) == 0){
-        //Serial.printf("I am the next hop ");
+    if(memcmp(nextHop, localAddress(), sizeof(nextHop)) == 0){
+        Serial.printf("I am the next hop ");
         int entry = selectRoute(packet);
         if(entry == -1){
-            //Serial.printf(" but I don't have a route\n");
-            return;
+            Serial.printf(" but I don't have a route\n");
         }else{
-            //Serial.printf(" and I have a route RETRANSMIT\n");
+            Serial.printf(" and I have a route RETRANSMIT\n");
             retransmitRoutedPacket(packet, routeTable[entry]);
         }
     }else{
-        return;
-        //Serial.printf("I am not the next hop, packet dropped\n");
+        Serial.printf("I am not the next hop, packet dropped\n");
     }
 }
     
@@ -506,21 +405,20 @@ int packet_received(char* data, size_t len) {
 
     data[len] = '\0';
 
+    if(len <= 0){
+        return 0;
+    }
     // convert ASCII data to pure bytes
     uint8_t* byteData = ( uint8_t* ) data;
     
     // randomly generate RSSI and SNR values 
     // see https://github.com/sudomesh/disaster-radio-simulator/issues/3
-    uint8_t packet_rssi = rand() % (256 - 128) + 128;
-    uint8_t packet_snr = rand() % (256 - 128) + 128;
+    //uint8_t packet_rssi = rand() % (256 - 128) + 128;
+    //uint8_t packet_snr = rand() % (256 - 128) + 128;
     // articial packet loss
-    uint8_t packet_randomness = rand() % (256 - 128) + 128;
-
-    struct Metadata metadata = {
-        packet_rssi,
-        packet_snr,
-        packet_randomness
-    };
+    //uint8_t packet_randomness = rand() % (256 - 128) + 128;
+    
+    struct Metadata metadata;
     struct Packet packet = {
         byteData[0],
         byteData[1], 
@@ -531,7 +429,7 @@ int packet_received(char* data, size_t len) {
     };
     memcpy(packet.data, byteData + HEADER_LENGTH, packet.totalLength-HEADER_LENGTH);
 
-    //printPacketInfo(packet, metadata);
+    //printPacketInfo(packet);
     
     switch(packet.type){
         case 'h' :
@@ -554,47 +452,35 @@ int packet_received(char* data, size_t len) {
             Serial.printf("this is a map message\n");
             break;
         default :
-            printPacketInfo(packet, metadata);
+            printPacketInfo(packet);
             Serial.printf("message type not found\n");
     }
     return 0;
 }
 
+long transmitHello(long interval, long lastTime){
 
-
-long lastHelloTime = 0;
-void transmitHello(){
-
-    if (time(NULL) - lastHelloTime > helloInterval()) {
+    long newLastTime = 0;
+    if (getTime() - lastTime > interval) {
         uint8_t data[240] = "Hola";
         int dataLength = 4;
         //TODO: add randomness to message to avoid hashisng issues
         uint8_t destination[6] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
-        struct Packet helloMessage = buildPacket(1, mac, destination, messageCount, 'h', data, dataLength); 
-        uint8_t* sending = (uint8_t*)  malloc(sizeof(helloMessage));
-        memcpy(sending, &helloMessage, sizeof(helloMessage));
-        send_packet(sending, helloMessage.totalLength);
-        messageCount++;
-        lastHelloTime = time(NULL);
-        debug_printf("Sending beacon: ");
-        for(int i = 0 ; i < helloMessage.totalLength ; i++){
-            debug_printf("%02x", sending[i]);
-        }
-        debug_printf("\r\n");
+        struct Packet helloMessage = buildPacket(1, localAddress(), destination, _messageCount, 'h', data, dataLength); 
+        sendPacket(helloMessage);
+        newLastTime = getTime();
     }
+    return newLastTime;
 }
 
-long lastRouteTime = 0;
-void transmitRoutes(){
+long transmitRoutes(long interval, long lastTime){
 
-    if (time(NULL) - lastRouteTime > routeInterval()) {
+    long newLastTime = 0;
+    if (getTime() - lastTime > interval) {
         uint8_t data[240];
         int dataLength = 0;
+        Serial.printf("transmitting routes\r\n");
         debug_printf("number of routes before transmit: %d\n", routeEntry);
-        if (routeEntry == 0){
-            lastRouteTime = time(NULL);
-            return;
-        }
         int routesPerPacket = routeEntry;
         if (routeEntry >= MAX_ROUTES_PER_PACKET-1){
             routesPerPacket = MAX_ROUTES_PER_PACKET-1;
@@ -616,35 +502,27 @@ void transmitRoutes(){
         }
         debug_printf("\n");
         uint8_t destination[6] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
-        struct Packet routeMessage = buildPacket(1, mac, destination, messageCount, 'r', data, dataLength); 
-        uint8_t* sending = (uint8_t*) malloc(sizeof(routeMessage));
-        memcpy(sending, &routeMessage, sizeof(routeMessage));
-        send_packet(sending, routeMessage.totalLength);
-        messageCount++;
-        lastRouteTime = time(NULL);
-        debug_printf("Sending routes: ");
-        for(int i = 0 ; i < routeMessage.totalLength ; i++){
-            debug_printf("%02x", sending[i]);
-        }
-        debug_printf("\n");
+        struct Packet routeMessage = buildPacket(1, localAddress(), destination, _messageCount, 'r', data, dataLength); 
+        printPacketInfo(routeMessage);
+        sendPacket(routeMessage);
+        newLastTime = getTime();
     }
+    return newLastTime;
 }
 
-int choose = 0;
-long lastMessageTime = 0;
-void transmitToRandomRoute(){
-
-    if (time(NULL) - lastMessageTime > messageInterval()) {
-
+long transmitToRandomRoute(long interval, long lastTime){
+    long newLastTime = 0;
+    if (getTime() - lastTime > interval) {
         if (routeEntry == 0){
-            Serial.printf("node %s trying to send but has no routes\n", nodeID);
-            lastMessageTime = time(NULL);
-            return;
+            Serial.printf("trying to send but I have no routes ");
+            newLastTime = getTime();
+            return newLastTime;
         }
+        int choose = rand()%routeEntry;
         uint8_t destination[ADDR_LENGTH];
         memcpy(destination, &routeTable[choose].destination, sizeof(destination));
 
-        Serial.printf("node %s sending a message using route %d to ", nodeID, choose);
+        Serial.printf("trying to send a random message to ");
         for( int j = 0 ; j < ADDR_LENGTH ; j++){
             Serial.printf("%02x", routeTable[choose].destination[j]);
         }
@@ -660,108 +538,11 @@ void transmitToRandomRoute(){
             data[dataLength] = routeTable[choose].nextHop[i];
             dataLength++;
         }
-        struct Packet randomMessage = buildPacket(32, mac, destination, messageCount, 'c', data, dataLength); 
-        uint8_t* sending = (uint8_t*)  malloc(sizeof(randomMessage));
-        memcpy(sending, &randomMessage, sizeof(randomMessage));
-        send_packet(sending, randomMessage.totalLength);
-        messageCount++;
-        choose++;
-        if(choose == routeEntry){
-            choose = 0;
-        }
-        lastMessageTime = time(NULL);
+        struct Packet randomMessage = buildPacket(32, localAddress(), destination, _messageCount, 'c', data, dataLength); 
+        sendPacket(randomMessage);
+        _messageCount++;
+        newLastTime = getTime();
     }
+    return newLastTime;
 }
 
-void wifiSetup(){
-
-    //WiFi.macAddress(mac);
-    /*
-    //reverse mac address ESP-specific
-    uint8_t tmp;
-    int start = 0;
-    int end = ADDR_LENGTH-1;
-    while (start < end) 
-    { 
-        tmp = mac[start];    
-        mac[start] = mac[end]; 
-        mac[end] = tmp; 
-        start++; 
-        end--; 
-    }    
-    */
-    sprintf(macaddr, "%02x%02x%02x%02x%02x%02x\0", mac[0], mac[1], mac[2], mac[3], mac[4], mac [5]);
-    debug_printf("%s\n", macaddr);
-    //strcat(ssid, macaddr);
-    //WiFi.hostname(hostName);
-    //WiFi.mode(WIFI_AP);
-    //WiFi.softAPConfig(local_IP, gateway, netmask);
-    //WiFi.softAP(ssid);
-}
-
-long startTime;
-int chance;
-int setup() {
-
-    Serial.printf("node %s initialized\n", nodeID);
-    debug_printf("debuggin enabled\n");
-
-    wifiSetup();
-
-    srand(time(NULL) + getpid());
-    // random wait at boot
-    int wait = rand()%maxRandomDelay();
-    debug_printf("waiting %d s\n", wait);
-    nsleep(wait, 0);
-
-    startTime = time(NULL);
-    lastHelloTime = time(NULL);
-    lastRouteTime = time(NULL);
-    _learningTimeout += wait;
-    _discoveryTimeout += wait;
-
-    chance=rand()%15;
-    if(chance == 1){
-        Serial.printf("node %s shall send a random message\n", nodeID);
-    }
-
-    return 0;
-}
-
-int state = 0;
-int loop() {
-
-    if(!begin_packet()){
-        //debug_printf("transmit in progress please wait");
-    }else{
-        if(state == 0){
-            Serial.printf("learning... %d\r", time(NULL) - startTime);
-            if(DEBUG){
-                printNeighborTable();
-                printRoutingTable();
-            }
-            transmitHello();
-            if(time(NULL) - startTime > discoveryTimeout()) {
-                state++;
-            }
-        }else if(state == 1){
-            Serial.printf("learning... %d\r", time(NULL) - startTime);
-            if(DEBUG){
-                printNeighborTable();
-                printRoutingTable();
-            }
-            transmitRoutes();
-            if(time(NULL) - startTime > learningTimeout()) {
-                state++;
-                printNeighborTable();
-                printRoutingTable();
-            }
-        }else if(state == 2){
-            checkBuffer(); 
-            if(chance == 1){
-                transmitToRandomRoute();        
-            }
-        }
-    }
-    nsleep(0, 1000000*simulationTime(1));
-}
