@@ -60,7 +60,8 @@ void printAddress(uint8_t address[ADDR_LENGTH]);
 int packet_received(char* data, size_t len);
 long transmitHello(long interval, long lastTime);
 long transmitRoutes(long interval, long lastTime);
-long transmitToRandomRoute(long interval, long lastTime);
+long transmitToRoute(long interval, long lastTime, int dest);
+int getRouteEntry();
 
 // private functions
 //uint8_t calculatePacketLoss(int entry, uint8_t sequence);

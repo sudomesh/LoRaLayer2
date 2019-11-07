@@ -308,7 +308,7 @@ int main(int argc, char **argv) {
       }
 
       while(got < len) {
-        ret = read(STDIN, (void*) buffer+got, len-got);
+        ret = read(STDIN, (void*)(buffer+got), len-got);
         if(ret < 0) {
           if(errno == EAGAIN) { // we need to wait for more data
             break;

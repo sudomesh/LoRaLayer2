@@ -8,6 +8,7 @@ int state = 0;
 int chance;
 long startTime;
 long lastRoutingTime;
+int dest;
 
 int _routeInterval = 10;
 int _learningTimeout = 200;
@@ -25,18 +26,20 @@ int maxRandomDelay(){
 
 int setup(){
 
+    srand(time(NULL) + getpid());
     uint8_t* myAddress = localAddress();
-    Serial.printf("local address: ");
+    Serial.printf("local address ");
     printAddress(myAddress);
+    chance=rand()%15;
+    if(chance == 1){
+        Serial.printf(" will transmit");
+    }
     Serial.printf("\n");
 
-    srand(time(NULL) + getpid());
     // random blocking wait at boot
     int wait = rand()%maxRandomDelay();
     Serial.printf("waiting %d s\n", wait);
     sleep(wait);
-
-    chance=rand()%15;
 
     startTime = getTime();
     lastRoutingTime = startTime;
@@ -59,7 +62,11 @@ int loop(){
             }
         }else if(state == 1){
             if(chance == 1){
-                long timestamp = transmitToRandomRoute(routeInterval(), lastRoutingTime);        
+                long timestamp = transmitToRoute(routeInterval(), lastRoutingTime, dest);
+                dest++;
+                if(dest == getRouteEntry()){
+                    dest = 0;
+                }
                 if(timestamp){
                     lastRoutingTime = timestamp;
                 }

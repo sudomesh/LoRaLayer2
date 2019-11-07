@@ -510,7 +510,7 @@ long transmitRoutes(long interval, long lastTime){
     return newLastTime;
 }
 
-long transmitToRandomRoute(long interval, long lastTime){
+long transmitToRoute(long interval, long lastTime, int dest){
     long newLastTime = 0;
     if (getTime() - lastTime > interval) {
         if (routeEntry == 0){
@@ -518,24 +518,24 @@ long transmitToRandomRoute(long interval, long lastTime){
             newLastTime = getTime();
             return newLastTime;
         }
-        int choose = rand()%routeEntry;
+
         uint8_t destination[ADDR_LENGTH];
-        memcpy(destination, &routeTable[choose].destination, sizeof(destination));
+        memcpy(destination, &routeTable[dest].destination, sizeof(destination));
 
         Serial.printf("trying to send a random message to ");
         for( int j = 0 ; j < ADDR_LENGTH ; j++){
-            Serial.printf("%02x", routeTable[choose].destination[j]);
+            Serial.printf("%02x", routeTable[dest].destination[j]);
         }
         Serial.printf(" via ");
         for( int j = 0 ; j < ADDR_LENGTH ; j++){
-            Serial.printf("%02x", routeTable[choose].nextHop[j]);
+            Serial.printf("%02x", routeTable[dest].nextHop[j]);
         }
         Serial.printf("\n");
 
         uint8_t data[240];
         int dataLength = 0;
         for( int i = 0 ; i < ADDR_LENGTH ; i++){
-            data[dataLength] = routeTable[choose].nextHop[i];
+            data[dataLength] = routeTable[dest].nextHop[i];
             dataLength++;
         }
         struct Packet randomMessage = buildPacket(32, localAddress(), destination, _messageCount, 'c', data, dataLength); 
@@ -546,3 +546,6 @@ long transmitToRandomRoute(long interval, long lastTime){
     return newLastTime;
 }
 
+int getRouteEntry(){
+    return routeEntry;
+}
