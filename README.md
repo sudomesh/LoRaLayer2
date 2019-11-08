@@ -1,41 +1,22 @@
+Layer 2 routing protocol for LoRa connected devices 
 
-These are the external routers (routing algorithms) written in C.
+This library is a general purpose, minimal routing protocol. It is intended for use with https://github.com/sudomesh/disaster-radio and was designed using https://github.com/sudomesh/disaster-radio-simulator.
 
-These communicate with the simulator using `stdin` and `stdout`.
+For documentation on the technical details of the LoRaLayer2 protocol, visit the disaster-radio wiki [Protocol page](https://github.com/sudomesh/disaster-radio/wiki/Protocol).
 
-Each external router must declare:
+To use this library, you will need to clone this repository, include the src files in your C project and compile them using gcc. An example routing sketch and Makefile can be found in the `examples` directory.
 
-```
-int setup(); // called once on startup
-int loop(); // called once per event loop iteration
-int packet_received(char* data, size_t len); // called when a packet is received
-```
+(I will publish to arduino once I have a chance to test that dev setup and tag a release) 
 
-To send a packet call:
+## Description of library files
 
-```
-int send_packet(char* data, size_t len);
-```
+`Layer1_LoRa.cpp` and `Layer1_LoRa.h` take features from the real disaster.radio firmware. Acts as the connection between the physical layer LoRa transceiver and the Layer 2 routing logic. Heavily dependent on https://github.com/sandeepmistry/arduino-LoRa 
 
-If data is a null-terminated string then you can set len to 0 and it will be automatically determined. Remember that packets are maximum 256 bytes (not counting the optional null-terminator).
+`Layer1_Sim.cpp` and `Layer1_Sim.h` act as the connection between simulated Layer1 found in https://github.com/sudomesh/disaster-radio-simulator and the Layer 2 routing logic.
 
-A minimal external router example is available in `ping_example.c` and can be compiled with the command `make ping_example`.
+`LoRaLayer2.cpp` and `LoRaLayer2.h` (previously known as routing.cpp and routing.h) contain the routing logic and manage the routing tables for the main sketch. The change of a single variable to swap which Layer 1 code they is being used by Layer 2. Declaring `#define LORA` will enable Layer1_LoRa, while `#define SIM` will enable Layer1_Sim.
 
-You can use the convenience function `Serial.printf()` to print debug output to `stderr` which will pass it to the javascript simulator and print it to stdout with a header that looks like this:
 
-```
-[node <node_id> router] <string>
-```
-
-If debug mode is enabled in the simulator then every time a packet is sent or received you will get output like so:
-
-```
-[node <node_id>] rx <data>
-or
-[node <node_id>] tx <data>
-```
-
-Remember that you cannot use `stdin` or `stdout` from within the external routers since they are already used for communication between the external router and the simulator so using just `printf()` will break things.
-
+Note from simulatori repo:
 If you use `sleep()` or `usleep()` in `setup()` or `loop()` then this will block the event loop which means that your `packet_received()` function will not be called until after the sleep is over. If you want to avoid this then you can instead call `nsleep(seconds, microseconds)` once inside `loop()` (calling it more than once overrides the previous calls) which will cause `loop()` to be called again the specified amount of time after completion, without blocking packet reception while "sleeping".
 
