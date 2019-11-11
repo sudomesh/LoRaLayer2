@@ -1,9 +1,9 @@
 #include <LoRa.h>
-#include "Layer1_LoRa.h"
-#include "LoRaLayer2.h"
-
+#include <Layer1.h>
+#ifdef LORA
 uint8_t _localAddress[ADDR_LENGTH];
-serial Serial;
+uint8_t hashTable[256][SHA1_LENGTH];
+uint8_t hashEntry = 0;
 
 int debug_printf(const char* format, ...) {
 
@@ -88,4 +88,4 @@ int send_packet(char* data, int len){
         LoRa.receive();
     }
 }
-
+#endif

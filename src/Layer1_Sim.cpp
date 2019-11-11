@@ -1,3 +1,6 @@
+#include <Layer1.h>
+#include <LoRaLayer2.h>
+#ifdef SIM
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,10 +15,7 @@
 #include <time.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <openssl/sha.h>
-#include "Layer1_Sim.h"
-#include "LoRaLayer2.h"
-
+//#include <openssl/sha.h>
 struct timeval to_sleep;
 int transmitting = 0;
 uint8_t _localAddress[ADDR_LENGTH];
@@ -328,8 +328,9 @@ int main(int argc, char **argv) {
           return ret;
         }
       }
-      else if(ret = packet_received(buffer, len)){
-        return ret;
+      else{
+        packet_received(buffer, len);
+        return 0;
       }
       meta = 0;
       len = 0;
@@ -345,3 +346,4 @@ int main(int argc, char **argv) {
 
   return 0;
 }
+#endif

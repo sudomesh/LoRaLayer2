@@ -1,7 +1,6 @@
 #include <unistd.h>
 #include <stdint.h>
 
-#define SIM 
 //#define DEBUG 0
 #define HEADER_LENGTH 16
 #define SHA1_LENGTH 40
@@ -57,7 +56,7 @@ void printPacketInfo(struct Packet packet);
 void printNeighborTable();
 void printRoutingTable();
 void printAddress(uint8_t address[ADDR_LENGTH]);
-int packet_received(char* data, size_t len);
+struct Packet packet_received(char* data, size_t len);
 long transmitHello(long interval, long lastTime);
 long transmitRoutes(long interval, long lastTime);
 long transmitToRoute(long interval, long lastTime, int dest);

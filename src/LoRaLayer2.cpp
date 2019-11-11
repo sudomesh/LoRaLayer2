@@ -7,17 +7,8 @@
 #include <fcntl.h>
 #include <stdarg.h>
 #include <string.h>
-#include "LoRaLayer2.h"
-
-#ifdef LORA
-// physical layer is a lora transciever 
-#include "Layer1_LoRa.h"
-#endif
-
-#ifdef SIM
-// physical layer is a simulated network
-#include "Layer1_Sim.h"
-#endif
+#include <Layer1.h>
+#include <LoRaLayer2.h>
 
 uint8_t _messageCount;
 
@@ -401,13 +392,10 @@ void parseChatPacket(struct Packet packet){
     }
 }
     
-int packet_received(char* data, size_t len) {
+struct Packet packet_received(char* data, size_t len) {
 
     data[len] = '\0';
 
-    if(len <= 0){
-        return 0;
-    }
     // convert ASCII data to pure bytes
     uint8_t* byteData = ( uint8_t* ) data;
     
@@ -455,7 +443,7 @@ int packet_received(char* data, size_t len) {
             printPacketInfo(packet);
             Serial.printf("message type not found\n");
     }
-    return 0;
+    return packet;
 }
 
 long transmitHello(long interval, long lastTime){

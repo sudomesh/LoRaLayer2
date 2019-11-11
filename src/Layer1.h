@@ -8,6 +8,21 @@
 #define SHA1_LENGTH 40
 #define ADDR_LENGTH 6 
 
+#define LORA // to use Layer1_LoRa.cpp
+//#define SIM // to use Layer1_Sim/cpp
+
+#ifdef LORA
+#include <Arduino.h>
+
+// public functions
+int debug_printf(const char* format, ...);
+int setLocalAddress(char* macString);
+uint8_t* localAddress();
+int send_packet(char* data, int len);
+int getTime();
+#endif
+
+#ifdef SIM
 typedef struct _serial {
   int (*printf)(const char*, ...);
 } serial;
@@ -32,3 +47,4 @@ int send_packet(char* data, uint8_t len);
 int setup(); // called once on startup
 int loop(); // called once per event loop iteration
 //int packet_received(char* data, size_t len); // called when a packet is received
+#endif
