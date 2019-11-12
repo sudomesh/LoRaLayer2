@@ -17,8 +17,10 @@ float packetSuccessWeight = .8;
 float randomMetricWeight = .2;
 
 // tables and buffers
-struct Packet buffer[8];
-int bufferEntry = 0;
+struct Packet outBuffer[8];
+int outBufferEntry = 0;
+struct Packet inBuffer[8];
+int inBufferEntry = 0;
 
 struct NeighborTableEntry neighborTable[255];
 int neighborEntry = 0;
@@ -50,32 +52,53 @@ int sendPacket(struct Packet packet) {
     return _messageCount;
 }
 
-void pushToBuffer(struct Packet packet){
+int pushToOutBuffer(struct Packet packet){
 
-    if(bufferEntry > 7){
-        bufferEntry = 0;
+    if(outBufferEntry > 7){
+        outBufferEntry = 0;
     }
 
-    memset(&buffer[bufferEntry], 0, sizeof(buffer[bufferEntry]));
-    memcpy(&buffer[bufferEntry], &packet, sizeof(buffer[bufferEntry]));
-    bufferEntry++;
+    memset(&outBuffer[outBufferEntry], 0, sizeof(outBuffer[outBufferEntry]));
+    memcpy(&outBuffer[outBufferEntry], &packet, sizeof(outBuffer[outBufferEntry]));
+    outBufferEntry++;
+    return outBufferEntry;
 }
 
-struct Packet popFromBuffer(){
+struct Packet popFromOutBuffer(){
 
-    bufferEntry--;
+    outBufferEntry--;
     struct Packet pop;
-    memcpy(&pop, &buffer[bufferEntry], sizeof(pop));
+    memcpy(&pop, &outBuffer[outBufferEntry], sizeof(pop));
     return pop; 
 }
 
-void checkBuffer(){
+void checkOutBuffer(){
 
-    if (bufferEntry > 0){
-        struct Packet packet = popFromBuffer();
+    if (outBufferEntry > 0){
+        struct Packet packet = popFromOutBuffer();
         sendPacket(packet);
     }
     //else buffer is empty;
+}
+
+int pushToInBuffer(struct Packet packet){
+    if(inBufferEntry > 7){
+        inBufferEntry = 0;
+    }
+
+    memset(&inBuffer[inBufferEntry], 0, sizeof(inBuffer[inBufferEntry]));
+    memcpy(&inBuffer[inBufferEntry], &packet, sizeof(inBuffer[inBufferEntry]));
+    inBufferEntry++;
+    return inBufferEntry;
+}
+
+struct Packet popFromInBuffer(){
+    struct Packet pop = { 0, 0 };
+    if(inBufferEntry > 0){
+        inBufferEntry--;
+        memcpy(&pop, &inBuffer[inBufferEntry], sizeof(pop));
+    }
+    return pop;
 }
 
 struct Packet buildPacket( uint8_t ttl, uint8_t src[6], uint8_t dest[6], uint8_t sequence, uint8_t type, uint8_t data[240], uint8_t dataLength){
@@ -305,7 +328,7 @@ void retransmitRoutedPacket(struct Packet packet, struct RoutingTableEntry route
     struct Packet newMessage = buildPacket(packet.ttl, packet.source, packet.destination, packet.sequence, packet.type, data, dataLength); 
 
     // queue packet to be transmitted
-    pushToBuffer(newMessage);
+    pushToOutBuffer(newMessage);
 }
 
 int parseHelloPacket(struct Packet packet, struct Metadata metadata){
@@ -392,9 +415,13 @@ void parseChatPacket(struct Packet packet){
     }
 }
     
-struct Packet packet_received(char* data, size_t len) {
+int packet_received(char* data, size_t len) {
 
     data[len] = '\0';
+
+    if(len <= 0){
+        return 0;
+    }
 
     // convert ASCII data to pure bytes
     uint8_t* byteData = ( uint8_t* ) data;
@@ -417,8 +444,6 @@ struct Packet packet_received(char* data, size_t len) {
     };
     memcpy(packet.data, byteData + HEADER_LENGTH, packet.totalLength-HEADER_LENGTH);
 
-    //printPacketInfo(packet);
-    
     switch(packet.type){
         case 'h' :
             // hello packet;
@@ -443,7 +468,8 @@ struct Packet packet_received(char* data, size_t len) {
             printPacketInfo(packet);
             Serial.printf("message type not found\n");
     }
-    return packet;
+    pushToInBuffer(packet);
+    return 0;
 }
 
 long transmitHello(long interval, long lastTime){

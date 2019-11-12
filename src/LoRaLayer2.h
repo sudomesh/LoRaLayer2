@@ -47,16 +47,18 @@ struct RoutingTableEntry{
 // public funcitons
 uint8_t messageCount();
 int sendPacket(struct Packet packet);
-void pushToBuffer(struct Packet packet);
-struct Packet popFromBuffer();
-void checkBuffer();
+int pushToOutBuffer(struct Packet packet);
+struct Packet popFromOutBuffer();
+void checkOutBuffer();
+int pushToInBuffer(struct Packet packet);
+struct Packet popFromInBuffer();
 struct Packet buildPacket( uint8_t ttl, uint8_t src[6], uint8_t dest[6], uint8_t sequence, uint8_t type, uint8_t data[240], uint8_t dataLength);
 void printMetadata(struct Metadata metadata);
 void printPacketInfo(struct Packet packet);
 void printNeighborTable();
 void printRoutingTable();
 void printAddress(uint8_t address[ADDR_LENGTH]);
-struct Packet packet_received(char* data, size_t len);
+int packet_received(char* data, size_t len);
 long transmitHello(long interval, long lastTime);
 long transmitRoutes(long interval, long lastTime);
 long transmitToRoute(long interval, long lastTime, int dest);

@@ -328,9 +328,8 @@ int main(int argc, char **argv) {
           return ret;
         }
       }
-      else{
-        packet_received(buffer, len);
-        return 0;
+      else if(ret = packet_received(buffer, len)){
+        return ret;
       }
       meta = 0;
       len = 0;
