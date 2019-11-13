@@ -1,9 +1,24 @@
 #include <LoRa.h>
 #include <Layer1.h>
-#ifdef LORA
+#include <LoRaLayer2.h>
+#ifdef LORA 
 uint8_t _localAddress[ADDR_LENGTH];
 uint8_t hashTable[256][SHA1_LENGTH];
 uint8_t hashEntry = 0;
+int _loraInitialized = 0;
+
+// for portable node (esp32 TTGO v1.6 - see also below) use these settings:
+const int _loraCSPin = 18; // LoRa radio chip select, GPIO15 = D8 on WeMos D1 mini
+const int _resetPin = 23;       // LoRa radio reset, GPIO0 = D3 
+const int _DIOPin = 26;        // interrupt pin for receive callback?, GPIO2 = D4
+
+// for solar-powered module use these settings:
+/*
+const int csPin = 2;          // LoRa radio chip select, GPIO2
+const int resetPin = 5;       // LoRa radio reset (hooked to LED, unused)
+const int DIOPin = 16;        // interrupt pin for receive callback?, GPIO16
+*/
+
 
 int debug_printf(const char* format, ...) {
 
@@ -73,6 +88,53 @@ int isHashNew(char incoming[SHA1_LENGTH]){
         hashEntry++;
     }
     return hashNew;
+}
+
+void onReceive(int packetSize) {
+
+    if (packetSize == 0) return;          // if there's no packet, return
+    char incoming[PACKET_LENGTH];                 // payload of packet
+    int incomingLength = 0;
+    while (LoRa.available()) { 
+        incoming[incomingLength] = (char)LoRa.read(); 
+        incomingLength++;
+    }
+    packet_received(incoming, incomingLength);
+}
+
+int loraInitialized(){
+    return _loraInitialized;
+}
+
+int loraCSPin(){ 
+    return _loraCSPin;
+}
+
+int resetPin(){ 
+    return _resetPin;
+}
+
+int DIOPin(){
+    return _DIOPin;
+}
+
+int loraSetup(){ // maybe this should take the pins and spreading factor as inputs?
+
+    LoRa.setPins(_loraCSPin, _resetPin, _DIOPin); // set CS, reset, DIO pin
+
+    if (!LoRa.begin(915E6)) {             // initialize ratio at 915 MHz
+        Serial.printf("LoRa init failed. Check your connections.\r\n");
+        return _loraInitialized;
+    }
+
+    LoRa.setSPIFrequency(100E3);
+    LoRa.setSpreadingFactor(9);           // ranges from 6-12,default 7 see API docs
+    LoRa.onReceive(onReceive);
+    LoRa.receive();
+
+    Serial.printf("LoRa init succeeded.\r\n");
+    _loraInitialized = 1;
+    return _loraInitialized;
 }
 
 int send_packet(char* data, int len){

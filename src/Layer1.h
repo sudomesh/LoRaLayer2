@@ -18,8 +18,14 @@
 int debug_printf(const char* format, ...);
 int setLocalAddress(char* macString);
 uint8_t* localAddress();
-int send_packet(char* data, int len);
 int getTime();
+int loraCSPin();
+int resetPin();
+int DIOPin();
+int loraInitialized();
+int loraSetup();
+int send_packet(char* data, int len);
+
 #endif
 
 #ifdef SIM

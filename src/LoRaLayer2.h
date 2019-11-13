@@ -3,6 +3,7 @@
 
 //#define DEBUG 0
 #define HEADER_LENGTH 16
+#define PACKET_LENGTH 256
 #define SHA1_LENGTH 40
 #define ADDR_LENGTH 6 
 #define MAX_ROUTES_PER_PACKET 30
