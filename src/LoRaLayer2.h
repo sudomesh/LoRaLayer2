@@ -45,35 +45,55 @@ struct RoutingTableEntry{
     uint8_t metric;
 };
 
-// public funcitons
-uint8_t messageCount();
-int sendPacket(struct Packet packet);
-int pushToOutBuffer(struct Packet packet);
-struct Packet popFromOutBuffer();
-void checkOutBuffer();
-int pushToInBuffer(struct Packet packet);
-struct Packet popFromInBuffer();
-struct Packet buildPacket( uint8_t ttl, uint8_t src[6], uint8_t dest[6], uint8_t sequence, uint8_t type, uint8_t data[240], uint8_t dataLength);
-void printMetadata(struct Metadata metadata);
-void printPacketInfo(struct Packet packet);
-void printNeighborTable();
-void printRoutingTable();
-void printAddress(uint8_t address[ADDR_LENGTH]);
-int packet_received(char* data, size_t len);
-long transmitHello(long interval, long lastTime);
-long transmitRoutes(long interval, long lastTime);
-long transmitToRoute(long interval, long lastTime, int dest);
-int getRouteEntry();
+class LL2Class {
+public:
+    LL2Class();
+    uint8_t messageCount();
+    int pushToOutBuffer(struct Packet packet);
+    void checkOutBuffer();
+    struct Packet popFromInBuffer();
+    struct Packet buildPacket( uint8_t ttl, uint8_t src[6], uint8_t dest[6], uint8_t sequence, uint8_t type, uint8_t data[240], uint8_t dataLength);
+    void printAddress(uint8_t address[ADDR_LENGTH]);
+    int packetReceived(char* data, size_t len);
+    int getRouteEntry();
 
-// private functions
-//uint8_t calculatePacketLoss(int entry, uint8_t sequence);
-//uint8_t calculateMetric(int entry, uint8_t sequence, struct Metadata metadata);
-//int checkNeighborTable(struct NeighborTableEntry neighbor);
-//int checkRoutingTable(struct RoutingTableEntry route);
-//int updateNeighborTable(struct NeighborTableEntry neighbor, int entry);
-//int updateRouteTable(struct RoutingTableEntry route, int entry);
-//int selectRoute(struct Packet packet);
-//void retransmitRoutedPacket(struct Packet packet, struct RoutingTableEntry route);
-//int parseHelloPacket(struct Packet packet, struct Metadata metadata);
-//int parseRoutingPacket(struct Packet packet, struct Metadata metadata);
+private:
+    int sendPacket(struct Packet packet);
+    struct Packet popFromOutBuffer();
+    int pushToInBuffer(struct Packet packet);
+    void printMetadata(struct Metadata metadata);
+    void printPacketInfo(struct Packet packet);
+    void printNeighborTable();
+    void printRoutingTable();
+    long transmitHello(long interval, long lastTime);
+    long transmitRoutes(long interval, long lastTime);
+    long transmitToRoute(long interval, long lastTime, int dest);
 
+    uint8_t calculatePacketLoss(int entry, uint8_t sequence);
+    uint8_t calculateMetric(int entry, uint8_t sequence, struct Metadata metadata);
+    int checkNeighborTable(struct NeighborTableEntry neighbor);
+    int checkRoutingTable(struct RoutingTableEntry route);
+    int updateNeighborTable(struct NeighborTableEntry neighbor, int entry);
+    int updateRouteTable(struct RoutingTableEntry route, int entry);
+    int selectRoute(struct Packet packet);
+    void retransmitRoutedPacket(struct Packet packet, struct RoutingTableEntry route);
+    int parseHelloPacket(struct Packet packet, struct Metadata metadata);
+    int parseRoutingPacket(struct Packet packet, struct Metadata metadata);
+    void parseChatPacket(struct Packet packet);
+
+private:
+    uint8_t _messageCount;
+    float _packetSuccessWeight = .8;
+    float _randomMetricWeight = .2;
+    struct Packet _outBuffer[8];
+    int _outBufferEntry = 0;
+    struct Packet _inBuffer[8];
+    int _inBufferEntry = 0;
+    struct NeighborTableEntry _neighborTable[255];
+    int _neighborEntry = 0;
+    struct RoutingTableEntry _routeTable[255];
+    int _routeEntry = 0;
+
+};
+
+extern LL2Class LL2; //export

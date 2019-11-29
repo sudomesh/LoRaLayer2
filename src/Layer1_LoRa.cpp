@@ -2,25 +2,24 @@
 #include <Layer1.h>
 #include <LoRaLayer2.h>
 #ifdef LORA 
-uint8_t _localAddress[ADDR_LENGTH];
-uint8_t hashTable[256][SHA1_LENGTH];
-uint8_t hashEntry = 0;
-int _loraInitialized = 0;
-
-// for portable node (esp32 TTGO v1.6 - see also below) use these settings:
-const int _loraCSPin = 18; // LoRa radio chip select, GPIO15 = D8 on WeMos D1 mini
-const int _resetPin = 23;       // LoRa radio reset, GPIO0 = D3 
-const int _DIOPin = 26;        // interrupt pin for receive callback?, GPIO2 = D4
-
-// for solar-powered module use these settings:
-/*
-const int csPin = 2;          // LoRa radio chip select, GPIO2
-const int resetPin = 5;       // LoRa radio reset (hooked to LED, unused)
-const int DIOPin = 16;        // interrupt pin for receive callback?, GPIO16
-*/
 
 
-int debug_printf(const char* format, ...) {
+Layer1Class::Layer1Class() :
+
+    _localAddress(),
+    _hashTable(),
+    _hashEntry(0),
+    _loraInitialized(0),
+
+    _csPin(LORA_DEFAULT_CS_PIN),
+    _resetPin(LORA_DEFAULT_RESET_PIN),
+    _DIOPin(LORA_DEFAULT_DIO0_PIN)
+
+{
+
+}
+
+int Layer1Class::debug_printf(const char* format, ...) {
 
     if(DEBUG){
         int ret;
@@ -35,7 +34,7 @@ int debug_printf(const char* format, ...) {
     }
 }
 
-uint8_t hex_digit(char ch){
+uint8_t Layer1Class::hex_digit(char ch){
   if(( '0' <= ch ) && ( ch <= '9' )){
     ch -= '0';
   }else{
@@ -52,7 +51,7 @@ uint8_t hex_digit(char ch){
   return ch;
 }
 
-int setLocalAddress(char* macString){
+int Layer1Class::setLocalAddress(char* macString){
   for( int i = 0; i < sizeof(_localAddress)/sizeof(_localAddress[0]); ++i ){
     _localAddress[i]  = hex_digit( macString[2*i] ) << 4;
     _localAddress[i] |= hex_digit( macString[2*i+1] );
@@ -64,18 +63,18 @@ int setLocalAddress(char* macString){
   }
 }
 
-uint8_t* localAddress(){
+uint8_t* Layer1Class::localAddress(){
     return _localAddress;
 }
 
-int getTime(){
+int Layer1Class::getTime(){
     return millis();
 }
 
-int isHashNew(char incoming[SHA1_LENGTH]){
+int Layer1Class::isHashNew(char incoming[SHA1_LENGTH]){
     int hashNew = 1;
-    for( int i = 0 ; i <= hashEntry ; i++){
-        if(strcmp(incoming, (char*) hashTable[i]) == 0){
+    for( int i = 0 ; i <= _hashEntry ; i++){
+        if(strcmp(incoming, (char*) _hashTable[i]) == 0){
             hashNew = 0; 
         }
     }
@@ -83,14 +82,14 @@ int isHashNew(char incoming[SHA1_LENGTH]){
         Serial.printf("New message received");
         Serial.printf("\r\n");
         for( int i = 0 ; i < SHA1_LENGTH ; i++){
-            hashTable[hashEntry][i] = incoming[i];
+            _hashTable[_hashEntry][i] = incoming[i];
         }
-        hashEntry++;
+        _hashEntry++;
     }
     return hashNew;
 }
 
-void onReceive(int packetSize) {
+void Layer1Class::onReceive(int packetSize) {
 
     if (packetSize == 0) return;          // if there's no packet, return
     char incoming[PACKET_LENGTH];                 // payload of packet
@@ -99,28 +98,28 @@ void onReceive(int packetSize) {
         incoming[incomingLength] = (char)LoRa.read(); 
         incomingLength++;
     }
-    packet_received(incoming, incomingLength);
+    LL2.packetReceived(incoming, incomingLength);
 }
 
-int loraInitialized(){
+int Layer1Class::loraInitialized(){
     return _loraInitialized;
 }
 
-int loraCSPin(){ 
-    return _loraCSPin;
+int Layer1Class::loraCSPin(){
+    return _csPin;
 }
 
-int resetPin(){ 
+int Layer1Class::resetPin(){
     return _resetPin;
 }
 
-int DIOPin(){
+int Layer1Class::DIOPin(){
     return _DIOPin;
 }
 
-int loraSetup(){ // maybe this should take the pins and spreading factor as inputs?
+int Layer1Class::init(){ // maybe this should take the pins and spreading factor as inputs?
 
-    LoRa.setPins(_loraCSPin, _resetPin, _DIOPin); // set CS, reset, DIO pin
+    LoRa.setPins(_csPin, _resetPin, _DIOPin); // set CS, reset, DIO pin
 
     if (!LoRa.begin(915E6)) {             // initialize ratio at 915 MHz
         Serial.printf("LoRa init failed. Check your connections.\r\n");
@@ -137,7 +136,7 @@ int loraSetup(){ // maybe this should take the pins and spreading factor as inpu
     return _loraInitialized;
 }
 
-int send_packet(char* data, int len){
+int Layer1Class::send_packet(char* data, int len){
 
     Serial.printf("Sending: ");
     if(LoRa.beginPacket()){
@@ -150,4 +149,7 @@ int send_packet(char* data, int len){
         LoRa.receive();
     }
 }
+
+Layer1Class Layer1;
+
 #endif

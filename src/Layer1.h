@@ -14,17 +14,47 @@
 #ifdef LORA
 #include <Arduino.h>
 
-// public functions
-int debug_printf(const char* format, ...);
-int setLocalAddress(char* macString);
-uint8_t* localAddress();
-int getTime();
-int loraCSPin();
-int resetPin();
-int DIOPin();
-int loraInitialized();
-int loraSetup();
-int send_packet(char* data, int len);
+// for solar-powered module use these settings:
+/*
+#define LORA_DEFAULT_CS_PIN        2
+#define LORA_DEFAULT_RESET_PIN     5
+#define LORA_DEFAULT_DIO0_PIN      16
+*/
+
+#define LORA_DEFAULT_CS_PIN        18
+#define LORA_DEFAULT_RESET_PIN     23
+#define LORA_DEFAULT_DIO0_PIN      26
+
+class Layer1Class {
+public:
+    Layer1Class();
+    int debug_printf(const char* format, ...);
+    int setLocalAddress(char* macString);
+    uint8_t* localAddress();
+    int getTime();
+    int loraInitialized();
+    int loraCSPin();
+    int resetPin();
+    int DIOPin();
+    int init();
+    int send_packet(char* data, int len);
+
+private:
+    uint8_t hex_digit(char ch);
+    int isHashNew(char incoming[SHA1_LENGTH]);
+    static void onReceive(int packetSize);
+
+private:
+    uint8_t _localAddress[ADDR_LENGTH];
+    uint8_t _hashTable[256][SHA1_LENGTH];
+    int _hashEntry;
+    int _loraInitialized;
+    int _csPin;
+    int _resetPin;
+    int _DIOPin;
+};
+
+extern Layer1Class Layer1;
 
 #endif
 

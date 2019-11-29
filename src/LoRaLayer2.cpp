@@ -10,29 +10,28 @@
 #include <Layer1.h>
 #include <LoRaLayer2.h>
 
-uint8_t _messageCount;
 
-// metric weights
-float packetSuccessWeight = .8;
-float randomMetricWeight = .2;
+LL2Class::LL2Class() :
 
-// tables and buffers
-struct Packet outBuffer[8];
-int outBufferEntry = 0;
-struct Packet inBuffer[8];
-int inBufferEntry = 0;
+    _messageCount(),
+    _packetSuccessWeight(.8),
+    _randomMetricWeight(.2),
+    _outBuffer(),
+    _outBufferEntry(0),
+    _inBuffer(),
+    _inBufferEntry(0),
+    _neighborTable(),
+    _neighborEntry(0),
+    _routeTable(),
+    _routeEntry(0)
+{
+}
 
-struct NeighborTableEntry neighborTable[255];
-int neighborEntry = 0;
-
-struct RoutingTableEntry routeTable[255];
-int routeEntry = 0;
-
-uint8_t messageCount(){
+uint8_t LL2Class::messageCount(){
     return _messageCount;
 }
 
-int sendPacket(struct Packet packet) {
+int LL2Class::sendPacket(struct Packet packet) {
 
     uint8_t* sending = (uint8_t*) malloc(sizeof(packet));
     memcpy(sending, &packet, sizeof(packet));
@@ -47,61 +46,61 @@ int sendPacket(struct Packet packet) {
         //}
     }
     */
-    send_packet((char*) sending, packet.totalLength);
+    Layer1.send_packet((char*) sending, packet.totalLength);
     _messageCount++;
     return _messageCount;
 }
 
-int pushToOutBuffer(struct Packet packet){
+int LL2Class::pushToOutBuffer(struct Packet packet){
 
-    if(outBufferEntry > 7){
-        outBufferEntry = 0;
+    if(_outBufferEntry > 7){
+        _outBufferEntry = 0;
     }
 
-    memset(&outBuffer[outBufferEntry], 0, sizeof(outBuffer[outBufferEntry]));
-    memcpy(&outBuffer[outBufferEntry], &packet, sizeof(outBuffer[outBufferEntry]));
-    outBufferEntry++;
-    return outBufferEntry;
+    memset(&_outBuffer[_outBufferEntry], 0, sizeof(_outBuffer[_outBufferEntry]));
+    memcpy(&_outBuffer[_outBufferEntry], &packet, sizeof(_outBuffer[_outBufferEntry]));
+    _outBufferEntry++;
+    return _outBufferEntry;
 }
 
-struct Packet popFromOutBuffer(){
+struct Packet LL2Class::popFromOutBuffer(){
 
-    outBufferEntry--;
+    _outBufferEntry--;
     struct Packet pop;
-    memcpy(&pop, &outBuffer[outBufferEntry], sizeof(pop));
+    memcpy(&pop, &_outBuffer[_outBufferEntry], sizeof(pop));
     return pop; 
 }
 
-void checkOutBuffer(){
+void LL2Class::checkOutBuffer(){
 
-    if (outBufferEntry > 0){
+    if (_outBufferEntry > 0){
         struct Packet packet = popFromOutBuffer();
         sendPacket(packet);
     }
     //else buffer is empty;
 }
 
-int pushToInBuffer(struct Packet packet){
-    if(inBufferEntry > 7){
-        inBufferEntry = 0;
+int LL2Class::pushToInBuffer(struct Packet packet){
+    if(_inBufferEntry > 7){
+        _inBufferEntry = 0;
     }
 
-    memset(&inBuffer[inBufferEntry], 0, sizeof(inBuffer[inBufferEntry]));
-    memcpy(&inBuffer[inBufferEntry], &packet, sizeof(inBuffer[inBufferEntry]));
-    inBufferEntry++;
-    return inBufferEntry;
+    memset(&_inBuffer[_inBufferEntry], 0, sizeof(_inBuffer[_inBufferEntry]));
+    memcpy(&_inBuffer[_inBufferEntry], &packet, sizeof(_inBuffer[_inBufferEntry]));
+    _inBufferEntry++;
+    return _inBufferEntry;
 }
 
-struct Packet popFromInBuffer(){
+struct Packet LL2Class::popFromInBuffer(){
     struct Packet pop = { 0, 0 };
-    if(inBufferEntry > 0){
-        inBufferEntry--;
-        memcpy(&pop, &inBuffer[inBufferEntry], sizeof(pop));
+    if(_inBufferEntry > 0){
+        _inBufferEntry--;
+        memcpy(&pop, &_inBuffer[_inBufferEntry], sizeof(pop));
     }
     return pop;
 }
 
-struct Packet buildPacket( uint8_t ttl, uint8_t src[6], uint8_t dest[6], uint8_t sequence, uint8_t type, uint8_t data[240], uint8_t dataLength){
+struct Packet LL2Class::buildPacket( uint8_t ttl, uint8_t src[6], uint8_t dest[6], uint8_t sequence, uint8_t type, uint8_t data[240], uint8_t dataLength){
 
     uint8_t packetLength = HEADER_LENGTH + dataLength;
     uint8_t* buffer = (uint8_t*)  malloc(dataLength);
@@ -118,12 +117,12 @@ struct Packet buildPacket( uint8_t ttl, uint8_t src[6], uint8_t dest[6], uint8_t
     return packet;
 }
 
-void printMetadata(struct Metadata metadata){
+void LL2Class::printMetadata(struct Metadata metadata){
     Serial.printf("RSSI: %x\n", metadata.rssi);
     Serial.printf("SNR: %x\n", metadata.snr);
 }
 
-void printPacketInfo(struct Packet packet){
+void LL2Class::printPacketInfo(struct Packet packet){
 
     Serial.printf("\r\n");
     Serial.printf("ttl: %d\r\n", packet.ttl);
@@ -147,53 +146,53 @@ void printPacketInfo(struct Packet packet){
     Serial.printf("\r\n");
 }
 
-void printNeighborTable(){
+void LL2Class::printNeighborTable(){
 
     Serial.printf("\n");
     Serial.printf("Neighbor Table:\n");
-    for( int i = 0 ; i < neighborEntry ; i++){
+    for( int i = 0 ; i < _neighborEntry ; i++){
         for(int j = 0 ; j < ADDR_LENGTH ; j++){
-            Serial.printf("%02x", neighborTable[i].address[j]);
+            Serial.printf("%02x", _neighborTable[i].address[j]);
         }
-        Serial.printf(" %3d ", neighborTable[i].metric);
+        Serial.printf(" %3d ", _neighborTable[i].metric);
         Serial.printf("\n");
     }
     Serial.printf("\n");
 }
 
-void printRoutingTable(){
+void LL2Class::printRoutingTable(){
 
     Serial.printf("\n");
-    Serial.printf("Routing Table: total routes %d\n", routeEntry);
-    for( int i = 0 ; i < routeEntry ; i++){
-        Serial.printf("%d hops from ", routeTable[i].distance);
+    Serial.printf("Routing Table: total routes %d\n", _routeEntry);
+    for( int i = 0 ; i < _routeEntry ; i++){
+        Serial.printf("%d hops from ", _routeTable[i].distance);
         for(int j = 0 ; j < ADDR_LENGTH ; j++){
-            Serial.printf("%02x", routeTable[i].destination[j]);
+            Serial.printf("%02x", _routeTable[i].destination[j]);
         }
         Serial.printf(" via ");
         for(int j = 0 ; j < ADDR_LENGTH ; j++){
-            Serial.printf("%02x", routeTable[i].nextHop[j]);
+            Serial.printf("%02x", _routeTable[i].nextHop[j]);
         }
-        Serial.printf(" metric %3d ", routeTable[i].metric);
+        Serial.printf(" metric %3d ", _routeTable[i].metric);
         Serial.printf("\n");
     }
     Serial.printf("\n\n");
 }
 
-void printAddress(uint8_t address[ADDR_LENGTH]){
+void LL2Class::printAddress(uint8_t address[ADDR_LENGTH]){
     for( int i = 0 ; i < ADDR_LENGTH; i++){
         Serial.printf("%02x", address[i]);
     }
 }
 
-uint8_t calculatePacketLoss(int entry, uint8_t sequence){
+uint8_t LL2Class::calculatePacketLoss(int entry, uint8_t sequence){
 
     uint8_t packet_loss;
-    uint8_t sequence_diff = sequence - neighborTable[entry].lastReceived;
+    uint8_t sequence_diff = sequence - _neighborTable[entry].lastReceived;
     if(sequence_diff == 0){
         // this is first packet received from neighbor
         // assume perfect packet success
-        neighborTable[entry].packet_success = 0xFF; 
+        _neighborTable[entry].packet_success = 0xFF;
         packet_loss = 0x00; 
     }else if(sequence_diff == 1){
         // do not decrease packet success rate
@@ -209,56 +208,56 @@ uint8_t calculatePacketLoss(int entry, uint8_t sequence){
     return packet_loss;
 }
 
-uint8_t calculateMetric(int entry, uint8_t sequence, struct Metadata metadata){
+uint8_t LL2Class::calculateMetric(int entry, uint8_t sequence, struct Metadata metadata){
 
-    float weightedPacketSuccess =  ((float) neighborTable[entry].packet_success)*packetSuccessWeight;
-    float weightedRandomness =  ((float) metadata.randomness)*randomMetricWeight;
+    float weightedPacketSuccess =  ((float) _neighborTable[entry].packet_success)*_packetSuccessWeight;
+    float weightedRandomness =  ((float) metadata.randomness)*_randomMetricWeight;
     //float weightedRSSI =  ((float) metadata.rssi)*RSSIWeight;
     //float weightedSNR =  ((float) metadata.snr)*SNRWeight;
     uint8_t metric = weightedPacketSuccess+weightedRandomness;
-    debug_printf("weighted packet success: %3f\n", weightedPacketSuccess);
-    debug_printf("weighted randomness: %3f\n", weightedRandomness);
-    //debug_printf("weighted RSSI: %3f\n", weightedRSSI);
-    //debug_printf("weighted SNR: %3f\n", weightedSNR);
-    debug_printf("metric calculated: %3d\n", metric);
+    Layer1.debug_printf("weighted packet success: %3f\n", weightedPacketSuccess);
+    Layer1.debug_printf("weighted randomness: %3f\n", weightedRandomness);
+    //Layer1.debug_printf("weighted RSSI: %3f\n", weightedRSSI);
+    //Layer1.debug_printf("weighted SNR: %3f\n", weightedSNR);
+    Layer1.debug_printf("metric calculated: %3d\n", metric);
     return metric;
 }
 
-int checkNeighborTable(struct NeighborTableEntry neighbor){
+int LL2Class::checkNeighborTable(struct NeighborTableEntry neighbor){
 
-    int entry = routeEntry;
-    for( int i = 0 ; i < neighborEntry ; i++){
+    int entry = _routeEntry;
+    for( int i = 0 ; i < _neighborEntry ; i++){
         //had to use memcmp instead of strcmp?
-        if(memcmp(neighbor.address, neighborTable[i].address, sizeof(neighbor.address)) == 0){
+        if(memcmp(neighbor.address, _neighborTable[i].address, sizeof(neighbor.address)) == 0){
             entry = i; 
         }
     }
     return entry;
 }
 
-int checkRoutingTable(struct RoutingTableEntry route){
+int LL2Class::checkRoutingTable(struct RoutingTableEntry route){
 
-    int entry = routeEntry; // assume this is a new route
-    for( int i = 0 ; i < routeEntry ; i++){
-        if(memcmp(route.destination, localAddress(), sizeof(route.destination)) == 0){
+    int entry = _routeEntry; // assume this is a new route
+    for( int i = 0 ; i < _routeEntry ; i++){
+        if(memcmp(route.destination, Layer1.localAddress(), sizeof(route.destination)) == 0){
             //this is me don't add to routing table 
-            //debug_printf("this route is my local address\n");
+            //Layer1.debug_printf("this route is my local address\n");
             entry = -1;
             return entry;
         }else 
-        if(memcmp(route.destination, routeTable[i].destination, sizeof(route.destination)) == 0){
-            if(memcmp(route.nextHop, routeTable[i].nextHop, sizeof(route.nextHop)) == 0){
+        if(memcmp(route.destination, _routeTable[i].destination, sizeof(route.destination)) == 0){
+            if(memcmp(route.nextHop, _routeTable[i].nextHop, sizeof(route.nextHop)) == 0){
                 // already have this exact route, update metric
                 entry = i; 
                 return entry;
             }else{
                 // already have this destination, but via a different neighbor
-                if(route.distance < routeTable[i].distance){
+                if(route.distance < _routeTable[i].distance){
                     // replace route if distance is better 
                     entry = i;
                 }else 
-                if(route.distance == routeTable[i].distance){
-                    if(route.metric > routeTable[i].metric){
+                if(route.distance == _routeTable[i].distance){
+                    if(route.metric > _routeTable[i].metric){
                     // replace route if distance is equal and metric is better 
                         entry = i;
                     }else{
@@ -275,46 +274,46 @@ int checkRoutingTable(struct RoutingTableEntry route){
     return entry;
 }
 
-int updateNeighborTable(struct NeighborTableEntry neighbor, int entry){
+int LL2Class::updateNeighborTable(struct NeighborTableEntry neighbor, int entry){
 
-    memset(&neighborTable[entry], 0, sizeof(neighborTable[entry]));
-    memcpy(&neighborTable[entry], &neighbor, sizeof(neighborTable[entry]));
-    if(entry == neighborEntry){
-        neighborEntry++;
-        debug_printf("new neighbor found: ");
+    memset(&_neighborTable[entry], 0, sizeof(_neighborTable[entry]));
+    memcpy(&_neighborTable[entry], &neighbor, sizeof(_neighborTable[entry]));
+    if(entry == _neighborEntry){
+        _neighborEntry++;
+        Layer1.debug_printf("new neighbor found: ");
     }else{
-        debug_printf("neighbor updated! ");
+        Layer1.debug_printf("neighbor updated! ");
     }
     return entry;
 }
 
-int updateRouteTable(struct RoutingTableEntry route, int entry){
+int LL2Class::updateRouteTable(struct RoutingTableEntry route, int entry){
 
-    memset(&routeTable[entry], 0, sizeof(routeTable[entry]));
-    memcpy(&routeTable[entry], &route, sizeof(routeTable[entry]));
-    if(entry == routeEntry){
-        routeEntry++;
-        debug_printf("new route found! ");
+    memset(&_routeTable[entry], 0, sizeof(_routeTable[entry]));
+    memcpy(&_routeTable[entry], &route, sizeof(_routeTable[entry]));
+    if(entry == _routeEntry){
+        _routeEntry++;
+        Layer1.debug_printf("new route found! ");
     }else{
-        debug_printf("route updated! ");
+        Layer1.debug_printf("route updated! ");
     }
-    printAddress(routeTable[entry].destination);
-    debug_printf("\n");
+    printAddress(_routeTable[entry].destination);
+    Layer1.debug_printf("\n");
     return entry;
 }
 
-int selectRoute(struct Packet packet){
+int LL2Class::selectRoute(struct Packet packet){
 
     int entry = -1;
-    for( int i = 0 ; i < routeEntry ; i++){
-        if(memcmp(packet.destination, routeTable[i].destination, sizeof(packet.destination)) == 0){
+    for( int i = 0 ; i < _routeEntry ; i++){
+        if(memcmp(packet.destination, _routeTable[i].destination, sizeof(packet.destination)) == 0){
             entry = i;
         }
     }
     return entry;
 }
 
-void retransmitRoutedPacket(struct Packet packet, struct RoutingTableEntry route){
+void LL2Class::retransmitRoutedPacket(struct Packet packet, struct RoutingTableEntry route){
 
     // decrement ttl
     packet.ttl--;
@@ -331,14 +330,14 @@ void retransmitRoutedPacket(struct Packet packet, struct RoutingTableEntry route
     pushToOutBuffer(newMessage);
 }
 
-int parseHelloPacket(struct Packet packet, struct Metadata metadata){
+int LL2Class::parseHelloPacket(struct Packet packet, struct Metadata metadata){
 
     struct NeighborTableEntry neighbor;
     memcpy(neighbor.address, packet.source, sizeof(neighbor.address));
     int n_entry = checkNeighborTable(neighbor);
     neighbor.lastReceived = packet.sequence;
     uint8_t packet_loss = calculatePacketLoss(n_entry, packet.sequence);
-    neighbor.packet_success = neighborTable[n_entry].packet_success - packet_loss;
+    neighbor.packet_success = _neighborTable[n_entry].packet_success - packet_loss;
     uint8_t metric = calculateMetric(n_entry, packet.sequence, metadata); 
     neighbor.metric = metric;
     updateNeighborTable(neighbor, n_entry);  
@@ -347,23 +346,23 @@ int parseHelloPacket(struct Packet packet, struct Metadata metadata){
     memcpy(route.destination, packet.source, ADDR_LENGTH);
     memcpy(route.nextHop, packet.source, ADDR_LENGTH);
     route.distance = 1;
-    route.metric = neighborTable[n_entry].metric;
+    route.metric = _neighborTable[n_entry].metric;
     int r_entry = checkRoutingTable(route);
     if(r_entry == -1){
-        debug_printf("do nothing, already have better route to ");
+        Layer1.debug_printf("do nothing, already have better route to ");
         printAddress(route.destination);
-        debug_printf("\n");
+        Layer1.debug_printf("\n");
     }else{
-        //if(routeEntry <= 30){
+        //if(_routeEntry <= 30){
         updateRouteTable(route, r_entry);
         //}
     }
     return n_entry;
 }
 
-int parseRoutingPacket(struct Packet packet, struct Metadata metadata){
+int LL2Class::parseRoutingPacket(struct Packet packet, struct Metadata metadata){
     int numberOfRoutes = (packet.totalLength - HEADER_LENGTH) / (ADDR_LENGTH+2);
-    debug_printf("routes in packet: %d\n", numberOfRoutes);
+    Layer1.debug_printf("routes in packet: %d\n", numberOfRoutes);
 
     int n_entry = parseHelloPacket(packet, metadata);
 
@@ -377,15 +376,15 @@ int parseRoutingPacket(struct Packet packet, struct Metadata metadata){
 
         int entry = checkRoutingTable(route);
         if(entry == -1){
-            debug_printf("do nothing, already have route to ");
+            Layer1.debug_printf("do nothing, already have route to ");
             printAddress(route.destination);
-            debug_printf("\n");
+            Layer1.debug_printf("\n");
         }else{
             // average neighbor metric with rest of route metric
             float hopRatio = 1/((float)route.distance);
-            metric = ((float) neighborTable[n_entry].metric)*(hopRatio) + ((float)route.metric)*(1-hopRatio);
+            metric = ((float) _neighborTable[n_entry].metric)*(hopRatio) + ((float)route.metric)*(1-hopRatio);
             route.metric = (uint8_t) metric;
-            //if(routeEntry <= 30){
+            //if(_routeEntry <= 30){
             updateRouteTable(route, entry);
             //}
         }
@@ -393,29 +392,29 @@ int parseRoutingPacket(struct Packet packet, struct Metadata metadata){
     return numberOfRoutes;
 }
 
-void parseChatPacket(struct Packet packet){
+void LL2Class::parseChatPacket(struct Packet packet){
     
-    if(memcmp(packet.destination, localAddress(), sizeof(packet.destination)) == 0){
+    if(memcmp(packet.destination, Layer1.localAddress(), sizeof(packet.destination)) == 0){
         Serial.printf("this message is for me\n");
         return;
     }
     uint8_t nextHop[ADDR_LENGTH];
     memcpy(nextHop, packet.data, sizeof(nextHop));
-    if(memcmp(nextHop, localAddress(), sizeof(nextHop)) == 0){
+    if(memcmp(nextHop, Layer1.localAddress(), sizeof(nextHop)) == 0){
         Serial.printf("I am the next hop ");
         int entry = selectRoute(packet);
         if(entry == -1){
             Serial.printf(" but I don't have a route\n");
         }else{
             Serial.printf(" and I have a route RETRANSMIT\n");
-            retransmitRoutedPacket(packet, routeTable[entry]);
+            retransmitRoutedPacket(packet, _routeTable[entry]);
         }
     }else{
         Serial.printf("I am not the next hop, packet dropped\n");
     }
 }
     
-int packet_received(char* data, size_t len) {
+int LL2Class::packetReceived(char* data, size_t len) {
 
     data[len] = '\0';
 
@@ -472,94 +471,96 @@ int packet_received(char* data, size_t len) {
     return 0;
 }
 
-long transmitHello(long interval, long lastTime){
+long LL2Class::transmitHello(long interval, long lastTime){
 
     long newLastTime = 0;
-    if (getTime() - lastTime > interval) {
+    if (Layer1.getTime() - lastTime > interval) {
         uint8_t data[240] = "Hola";
         int dataLength = 4;
         //TODO: add randomness to message to avoid hashisng issues
         uint8_t destination[6] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
-        struct Packet helloMessage = buildPacket(1, localAddress(), destination, _messageCount, 'h', data, dataLength); 
+        struct Packet helloMessage = buildPacket(1, Layer1.localAddress(), destination, _messageCount, 'h', data, dataLength);
         sendPacket(helloMessage);
-        newLastTime = getTime();
+        newLastTime = Layer1.getTime();
     }
     return newLastTime;
 }
 
-long transmitRoutes(long interval, long lastTime){
+long LL2Class::transmitRoutes(long interval, long lastTime){
 
     long newLastTime = 0;
-    if (getTime() - lastTime > interval) {
+    if (Layer1.getTime() - lastTime > interval) {
         uint8_t data[240];
         int dataLength = 0;
         Serial.printf("transmitting routes\r\n");
-        debug_printf("number of routes before transmit: %d\n", routeEntry);
-        int routesPerPacket = routeEntry;
-        if (routeEntry >= MAX_ROUTES_PER_PACKET-1){
+        Layer1.debug_printf("number of routes before transmit: %d\n", _routeEntry);
+        int routesPerPacket = _routeEntry;
+        if (_routeEntry >= MAX_ROUTES_PER_PACKET-1){
             routesPerPacket = MAX_ROUTES_PER_PACKET-1;
         }
         // random select without replacement of routes
         for( int i = 0 ; i < routesPerPacket ; i++){
             for( int j = 0 ; j < ADDR_LENGTH ; j++){
-                data[dataLength] = routeTable[i].destination[j];
+                data[dataLength] = _routeTable[i].destination[j];
                 dataLength++;
             }
-            data[dataLength] = routeTable[i].distance; //distance
+            data[dataLength] = _routeTable[i].distance; //distance
             dataLength++;
-            data[dataLength] = routeTable[i].metric;
+            data[dataLength] = _routeTable[i].metric;
             dataLength++;
         }
-        debug_printf("Sending data: ");
+        Layer1.debug_printf("Sending data: ");
         for(int i = 0 ; i < dataLength ; i++){
-            debug_printf("%02x ", data[i]);
+            Layer1.debug_printf("%02x ", data[i]);
         }
-        debug_printf("\n");
+        Layer1.debug_printf("\n");
         uint8_t destination[6] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
-        struct Packet routeMessage = buildPacket(1, localAddress(), destination, _messageCount, 'r', data, dataLength); 
+        struct Packet routeMessage = buildPacket(1, Layer1.localAddress(), destination, _messageCount, 'r', data, dataLength);
         printPacketInfo(routeMessage);
         sendPacket(routeMessage);
-        newLastTime = getTime();
+        newLastTime = Layer1.getTime();
     }
     return newLastTime;
 }
 
-long transmitToRoute(long interval, long lastTime, int dest){
+long LL2Class::transmitToRoute(long interval, long lastTime, int dest){
     long newLastTime = 0;
-    if (getTime() - lastTime > interval) {
-        if (routeEntry == 0){
+    if (Layer1.getTime() - lastTime > interval) {
+        if (_routeEntry == 0){
             Serial.printf("trying to send but I have no routes ");
-            newLastTime = getTime();
+            newLastTime = Layer1.getTime();
             return newLastTime;
         }
 
         uint8_t destination[ADDR_LENGTH];
-        memcpy(destination, &routeTable[dest].destination, sizeof(destination));
+        memcpy(destination, &_routeTable[dest].destination, sizeof(destination));
 
         Serial.printf("trying to send a random message to ");
         for( int j = 0 ; j < ADDR_LENGTH ; j++){
-            Serial.printf("%02x", routeTable[dest].destination[j]);
+            Serial.printf("%02x", _routeTable[dest].destination[j]);
         }
         Serial.printf(" via ");
         for( int j = 0 ; j < ADDR_LENGTH ; j++){
-            Serial.printf("%02x", routeTable[dest].nextHop[j]);
+            Serial.printf("%02x", _routeTable[dest].nextHop[j]);
         }
         Serial.printf("\n");
 
         uint8_t data[240];
         int dataLength = 0;
         for( int i = 0 ; i < ADDR_LENGTH ; i++){
-            data[dataLength] = routeTable[dest].nextHop[i];
+            data[dataLength] = _routeTable[dest].nextHop[i];
             dataLength++;
         }
-        struct Packet randomMessage = buildPacket(32, localAddress(), destination, _messageCount, 'c', data, dataLength); 
+        struct Packet randomMessage = buildPacket(32, Layer1.localAddress(), destination, _messageCount, 'c', data, dataLength);
         sendPacket(randomMessage);
         _messageCount++;
-        newLastTime = getTime();
+        newLastTime = Layer1.getTime();
     }
     return newLastTime;
 }
 
-int getRouteEntry(){
-    return routeEntry;
+int LL2Class::getRouteEntry(){
+    return _routeEntry;
 }
+
+LL2Class LL2;
