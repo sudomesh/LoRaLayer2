@@ -26,7 +26,7 @@ LL2Class::LL2Class() :
     _routeEntry(0),
     _startTime(),
     _lastRoutingTime(),
-    _routingInterval(),
+    _routingInterval(15000),
     _disableRoutingPackets(0)
 {
 }

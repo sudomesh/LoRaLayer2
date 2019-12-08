@@ -20,9 +20,77 @@ To use this library, you will need to clone this repository, include the src fil
 
 `LoRaLayer2.cpp` and `LoRaLayer2.h` (previously known as routing.cpp and routing.h) contain the routing logic and manage the routing tables for the main sketch. 
 
+## API
 
-Note from simulator repo:
-If you use `sleep()` or `usleep()` in `setup()` or `loop()` then this will block the event loop which means that your `packet_received()` function will not be called until after the sleep is over. If you want to avoid this then you can instead call `nsleep(seconds, microseconds)` once inside `loop()` (calling it more than once overrides the previous calls) which will cause `loop()` to be called again the specified amount of time after completion, without blocking packet reception while "sleeping".
+This library consists of two closely related classes. The Layer1 class and the LoRaLayer2 (or LL2) class. The APIs for interacting with these classes are as follows.
+
+### Layer1
+
+Initialize your Layer 1 interface,
+```
+Layer1.init();
+```
+
+Manually set the local address of your node,
+```
+Layer1.setLocalAddress(char* macString)
+```
+
+Retreive the current local address of your node,
+```
+unint8_t* mac = Layer1.localAddress()
+```
+
+Get the current time on your Layer 1 device as this may change from device to device (to simulator), 
+```
+int time = Layer1.getTime()
+```
+returns in milliseconds.
+
+Print to serial, only if `DEBUG` is enabled,
+```
+Layer1.debug_printf(const char* format, ...) 
+```
+
+Send a packet using Layer 1 interface. This will bypass LoRaLayer2 buffers and immeadiately transmit the packet. It should only be used if you know what you are doing,
+```
+Layer1.send_packet(char* data, int len)
+```
+
+## LoRaLayer2 (LL2)
+
+Intialize LoRaLayer2,
+```
+LL2.init()
+```
+
+Set interval between broadcasts of routing packets, set to 0 to turn off routing packet broadcasts. Takes interval in milliseconds, defaults to 15s if not called.
+```
+LL2.setInterval(long interval)
+```
+
+Check in with the LL2 protocol to see if any packets have been received or if any packets need to be sent out. This should be called once inside of your `loop()`. It acts as a psuedo-asynchronous method for monitoring your packet buffers.
+```
+LL2.daemon()
+```
+returns `1` if a packet has been received and is read out of the incoming packet buffer
+returns `0` if incoming packet buffer is empty.
+
+Send a packet to LL2 to be added to outgoing packet buffer and eventually, but usually immeadiately, transmitted over Layer1 interface.
+```
+LL2.sendToLayer2(uint8_t dest[6], uint8_t type, uint8_t data[240], uint8_t dataLength)
+```
+
+Get the current message count, i.e. the number of messages sent by the device since last boot,
+```
+uint8_t count = LL2.messageCount()
+```
+
+Get the lastest chat message from its LL2 buffer, 
+```
+struct Packet packet = LL2.popFromChatBuffer()
+```
+returns entire LL2 packet
 
 ## License and copyright
 * Copyright 2019 Sudo Mesh 
