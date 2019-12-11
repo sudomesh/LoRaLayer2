@@ -9,7 +9,7 @@
 #define ADDR_LENGTH 6 
 
 #define LORA // to use Layer1_LoRa.cpp
-//#define SIM // to use Layer1_Sim/cpp
+//#define SIM // to use Layer1_Sim.cpp
 
 #ifdef LORA
 #include <Arduino.h>
@@ -65,22 +65,41 @@ typedef struct _serial {
 
 extern serial Serial;
 
-// public functions
-int nsleep(unsigned int secs, useconds_t usecs);
-//int setTimeDistortion(float newDistortion);
-//float timeDistortion();
-int simulationTime(int realTime);
-int getTime();
-int isHashNew(uint8_t hash[SHA1_LENGTH]);
-int debug_printf(const char* format, ...);
-int print_err(const char* format, ...);
-int setLocalAddress(char* macString);
-uint8_t* localAddress();
-int begin_packet();
-int send_packet(char* data, uint8_t len);
-
 // you must declare these in your router
 int setup(); // called once on startup
 int loop(); // called once per event loop iteration
-//int packet_received(char* data, size_t len); // called when a packet is received
+
+class Layer1Class {
+public:
+    Layer1Class();
+    int nsleep(unsigned int secs, useconds_t usecs);
+    int simulationTime(int realTime);
+    int setTimeDistortion(float newDistortion);
+    int getTime();
+    int debug_printf(const char* format, ...);
+    //int print_err(const char* format, ...);
+    int setLocalAddress(char* macString);
+    uint8_t* localAddress();
+    int setNodeID(char* newID);
+    //char* nodeID();
+    int parse_metadata(char* data, uint8_t len);
+    int begin_packet();
+    int send_packet(char* data, uint8_t len);
+
+private:
+    uint8_t hex_digit(char ch);
+    int isHashNew(uint8_t hash[SHA1_LENGTH]);
+    float timeDistortion();
+
+private:
+    int _transmitting;
+    uint8_t _localAddress[ADDR_LENGTH];
+    char* _nodeID;
+    uint8_t _hashTable[256][SHA1_LENGTH];
+    uint8_t _hashEntry;
+    float _timeDistortion;
+
+};
+
+extern Layer1Class Layer1;
 #endif
