@@ -1,0 +1,36 @@
+#######################################
+# Syntax Coloring Map For LoRaLayer2
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+
+Layer1	KEYWORD1
+LL2     KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+
+debug_printf    KEYWORD2
+setLocalAddress KEYWORD2
+localAddress    KEYWORD2
+getTime	KEYWORD2
+loraInitialized KEYWORD2
+send_packet     KEYWORD2
+
+messageCount    KEYWORD2
+pushToOutBuffer KEYWORD2
+sendToLayer2    KEYWORD2
+popFromChatBuffer       KEYWORD2
+buildPacket     KEYWORD2
+printAddress    KEYWORD2
+printRoutingTable       KEYWORD2
+debug_printAddress      KEYWORD2
+packetReceived  KEYWORD2
+daemon  KEYWORD2
+getRouteEntry   KEYWORD2
+setInterval     KEYWORD2
+
+init	KEYWORD2
