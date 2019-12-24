@@ -55,6 +55,7 @@ public:
     struct Packet popFromChatBuffer();
     struct Packet buildPacket(uint8_t ttl, uint8_t src[6], uint8_t dest[6], uint8_t sequence, uint8_t type, uint8_t data[240], uint8_t dataLength);
     void printAddress(uint8_t address[ADDR_LENGTH]);
+    void printRoutingTable();
     void debug_printAddress(uint8_t address[ADDR_LENGTH]);
     int packetReceived(char* data, size_t len);
     int daemon();
@@ -71,7 +72,6 @@ private:
     void printMetadata(struct Metadata metadata);
     void printPacketInfo(struct Packet packet);
     void printNeighborTable();
-    void printRoutingTable();
     long transmitHello(long interval, long lastTime);
     long transmitToRoute(long interval, long lastTime, int dest);
     struct Packet buildRoutingPacket();

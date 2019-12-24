@@ -216,8 +216,8 @@ void LL2Class::printNeighborTable(){
 
 void LL2Class::printRoutingTable(){
 
-    Serial.printf("\n");
-    Serial.printf("Routing Table: total routes %d\n", _routeEntry);
+    Serial.printf("\r\n");
+    Serial.printf("Routing Table: total routes %d\r\n", _routeEntry);
     for( int i = 0 ; i < _routeEntry ; i++){
         Serial.printf("%d hops from ", _routeTable[i].distance);
         for(int j = 0 ; j < ADDR_LENGTH ; j++){
@@ -228,9 +228,9 @@ void LL2Class::printRoutingTable(){
             Serial.printf("%02x", _routeTable[i].nextHop[j]);
         }
         Serial.printf(" metric %3d ", _routeTable[i].metric);
-        Serial.printf("\n");
+        Serial.printf("\r\n");
     }
-    Serial.printf("\n\n");
+    Serial.printf("\r\n");
 }
 
 void LL2Class::printAddress(uint8_t address[ADDR_LENGTH]){

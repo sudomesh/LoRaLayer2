@@ -94,13 +94,13 @@ void Layer1Class::onReceive(int packetSize) {
     if (packetSize == 0) return;          // if there's no packet, return
     char incoming[PACKET_LENGTH];                 // payload of packet
     int incomingLength = 0;
-    Serial.printf("Receiving: ");
+    //Serial.printf("Receiving: ");
     while (LoRa.available()) { 
         incoming[incomingLength] = (char)LoRa.read(); 
-        Serial.printf("%02x", incoming[incomingLength]);
+        //Serial.printf("%02x", incoming[incomingLength]);
         incomingLength++;
     }
-    Serial.printf("\r\n");
+    //Serial.printf("\r\n");
     LL2.packetReceived(incoming, incomingLength);
 }
 
@@ -144,13 +144,13 @@ int Layer1Class::init(){ // maybe this should take the pins and spreading factor
 
 int Layer1Class::send_packet(char* data, int len){
 
-    Serial.printf("Sending: ");
+    //Serial.printf("Sending: ");
     if(LoRa.beginPacket()){
         for( int i = 0 ; i < len ; i++){
             LoRa.write(data[i]);
-            Serial.printf("%02x", data[i]);
+            //Serial.printf("%02x", data[i]);
         }
-        Serial.printf("\r\n");
+        //Serial.printf("\r\n");
         LoRa.endPacket(1);
         LoRa.receive();
     }
