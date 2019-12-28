@@ -51,6 +51,17 @@ uint8_t Layer1Class::hex_digit(char ch){
   return ch;
 }
 
+uint8_t* Layer1Class::charToHex(char* charString){
+    int hexLength = strlen(charString)/2;
+    uint8_t hexString[hexLength];
+    for( int i = 0 ; i < hexLength ; ++i ){
+        hexString[i]  = hex_digit(charString[2*i]) << 4;
+        hexString[i] |= hex_digit(charString[2*i+1]);
+    }
+    uint8_t *hexPtr = hexString;
+    return hexPtr;
+}
+
 int Layer1Class::setLocalAddress(char* macString){
   for( int i = 0; i < sizeof(_localAddress)/sizeof(_localAddress[0]); ++i ){
     _localAddress[i]  = hex_digit( macString[2*i] ) << 4;

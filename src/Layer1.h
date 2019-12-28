@@ -29,6 +29,7 @@ class Layer1Class {
 public:
     Layer1Class();
     int debug_printf(const char* format, ...);
+    uint8_t* charToHex(char* charString);
     int setLocalAddress(char* macString);
     uint8_t* localAddress();
     int getTime();
