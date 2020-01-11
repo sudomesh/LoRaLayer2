@@ -13,7 +13,8 @@ Layer1Class::Layer1Class() :
 
     _csPin(LORA_DEFAULT_CS_PIN),
     _resetPin(LORA_DEFAULT_RESET_PIN),
-    _DIOPin(LORA_DEFAULT_DIO0_PIN)
+    _DIOPin(LORA_DEFAULT_DIO0_PIN),
+    _spiFrequency(100E3)
 
 {
 
@@ -131,24 +132,29 @@ int Layer1Class::DIOPin(){
     return _DIOPin;
 }
 
+void Layer1Class::setPins(int cs, int reset, int dio){
+    _csPin = cs;
+    _resetPin = reset;
+    _DIOPin = dio;
+}
+
+void Layer1Class::setSPIFrequency(uint32_t frequency){
+    _spiFrequency = frequency;
+}
+
 int Layer1Class::init(){ // maybe this should take the pins and spreading factor as inputs?
 
-    pinMode(_csPin, OUTPUT);
-    pinMode(_DIOPin, INPUT);
-
     LoRa.setPins(_csPin, _resetPin, _DIOPin); // set CS, reset, DIO pin
+    LoRa.setSPIFrequency(_spiFrequency);
 
     if (!LoRa.begin(915E6)) {             // initialize ratio at 915 MHz
-        Serial.printf("LoRa init failed. Check your connections.\r\n");
         return _loraInitialized;
     }
 
-    LoRa.setSPIFrequency(100E3);
     LoRa.setSpreadingFactor(9);           // ranges from 6-12,default 7 see API docs
     LoRa.onReceive(onReceive);
     LoRa.receive();
 
-    Serial.printf("LoRa init succeeded.\r\n");
     _loraInitialized = 1;
     return _loraInitialized;
 }
