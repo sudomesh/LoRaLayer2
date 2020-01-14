@@ -40,6 +40,9 @@ public:
     int init();
     int send_packet(char* data, int len);
 
+    void setPins(int cs, int reset, int dio);
+    void setSPIFrequency(uint32_t frequency);
+
 private:
     uint8_t hex_digit(char ch);
     int isHashNew(char incoming[SHA1_LENGTH]);
@@ -53,6 +56,7 @@ private:
     int _csPin;
     int _resetPin;
     int _DIOPin;
+    uint32_t _spiFrequency;
 };
 
 extern Layer1Class Layer1;
