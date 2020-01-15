@@ -16,14 +16,14 @@
 
 // for solar-powered module use these settings:
 /*
-#define LORA_DEFAULT_CS_PIN        2
-#define LORA_DEFAULT_RESET_PIN     5
-#define LORA_DEFAULT_DIO0_PIN      16
+#define L1_DEFAULT_CS_PIN        2
+#define L1_DEFAULT_RESET_PIN     5
+#define L1_DEFAULT_DIO0_PIN      16
 */
 
-#define LORA_DEFAULT_CS_PIN        18
-#define LORA_DEFAULT_RESET_PIN     23
-#define LORA_DEFAULT_DIO0_PIN      26
+#define L1_DEFAULT_CS_PIN        18
+#define L1_DEFAULT_RESET_PIN     23
+#define L1_DEFAULT_DIO0_PIN      26
 
 class Layer1Class {
 public:

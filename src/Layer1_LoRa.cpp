@@ -11,9 +11,9 @@ Layer1Class::Layer1Class() :
     _hashEntry(0),
     _loraInitialized(0),
 
-    _csPin(LORA_DEFAULT_CS_PIN),
-    _resetPin(LORA_DEFAULT_RESET_PIN),
-    _DIOPin(LORA_DEFAULT_DIO0_PIN),
+    _csPin(L1_DEFAULT_CS_PIN),
+    _resetPin(L1_DEFAULT_RESET_PIN),
+    _DIOPin(L1_DEFAULT_DIO0_PIN),
     _spiFrequency(100E3)
 
 {
