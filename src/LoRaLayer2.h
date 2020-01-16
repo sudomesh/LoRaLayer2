@@ -52,7 +52,7 @@ public:
     uint8_t messageCount();
     int pushToOutBuffer(struct Packet packet);
     int sendToLayer2(uint8_t dest[6], uint8_t type, uint8_t data[240], uint8_t dataLength);
-    struct Packet popFromChatBuffer();
+    struct Packet popFromWSBuffer();
     struct Packet buildPacket(uint8_t ttl, uint8_t src[6], uint8_t dest[6], uint8_t sequence, uint8_t type, uint8_t data[240], uint8_t dataLength);
     void printAddress(uint8_t address[ADDR_LENGTH]);
     void printRoutingTable();
@@ -66,7 +66,7 @@ public:
 private:
     int sendToLayer1(struct Packet packet);
     struct Packet popFromOutBuffer();
-    int pushToChatBuffer(struct Packet packet);
+    int pushToWSBuffer(struct Packet packet);
     int pushToInBuffer(struct Packet packet);
     struct Packet popFromInBuffer();
     void printMetadata(struct Metadata metadata);
@@ -98,8 +98,8 @@ private:
     int _outBufferEntry;
     struct Packet _inBuffer[8];
     int _inBufferEntry;
-    struct Packet _chatBuffer[8];
-    int _chatBufferEntry;
+    struct Packet _wsBuffer[8];
+    int _wsBufferEntry;
     struct NeighborTableEntry _neighborTable[255];
     int _neighborEntry;
     struct RoutingTableEntry _routeTable[255];

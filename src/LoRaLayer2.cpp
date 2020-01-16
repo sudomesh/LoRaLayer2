@@ -83,21 +83,21 @@ void LL2Class::checkOutBuffer(){
     //else buffer is empty;
 }
 
-int LL2Class::pushToChatBuffer(struct Packet packet){
-    if(_chatBufferEntry > 7){
-        _chatBufferEntry = 0;
+int LL2Class::pushToWSBuffer(struct Packet packet){
+    if(_wsBufferEntry > 7){
+        _wsBufferEntry = 0;
     }
-    memset(&_chatBuffer[_chatBufferEntry], 0, sizeof(_chatBuffer[_chatBufferEntry]));
-    memcpy(&_chatBuffer[_chatBufferEntry], &packet, sizeof(_chatBuffer[_chatBufferEntry]));
-    _chatBufferEntry++;
-    return _chatBufferEntry;
+    memset(&_wsBuffer[_wsBufferEntry], 0, sizeof(_wsBuffer[_wsBufferEntry]));
+    memcpy(&_wsBuffer[_wsBufferEntry], &packet, sizeof(_wsBuffer[_wsBufferEntry]));
+    _wsBufferEntry++;
+    return _wsBufferEntry;
 }
 
-struct Packet LL2Class::popFromChatBuffer(){
+struct Packet LL2Class::popFromWSBuffer(){
     struct Packet pop = { 0, 0 };
-    if(_chatBufferEntry > 0){
-        _chatBufferEntry--;
-        memcpy(&pop, &_chatBuffer[_chatBufferEntry], sizeof(pop));
+    if(_wsBufferEntry > 0){
+        _wsBufferEntry--;
+        memcpy(&pop, &_wsBuffer[_wsBufferEntry], sizeof(pop));
     }
     return pop;
 }
@@ -140,7 +140,7 @@ void LL2Class::checkInBuffer(){
             case 'c' :
                 // chat packet
                 parseChatPacket(packet);
-                pushToChatBuffer(packet);
+                pushToWSBuffer(packet);
                 //Serial.printf("this is a chat message\n");
                 break;
             case 'm' :
@@ -618,6 +618,7 @@ int LL2Class::daemon(){
         Layer1.debug_printf("number of routes before transmit: %d\n", _routeEntry);
         struct Packet packet = buildRoutingPacket();
         pushToOutBuffer(packet);
+        pushToWSBuffer(packet);
         _lastRoutingTime = Layer1.getTime();
         return 1;
     }
