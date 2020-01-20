@@ -26,7 +26,29 @@ This library consists of two closely related classes. The Layer1 class and the L
 
 ### Layer1
 
-Initialize your Layer 1 interface,
+Prior to initializing your Layer1 interface, you can choose to set the following values,  
+```
+Layer1.setPins(int cs, int reset, int dio);
+```
+Corresponds to the GPIO pins of your ESP32 board that are conencted to chip select, reset and DIO0 pins of the LoRa transceiver. Defaults to cs = 18, reset = 23, dio = 26.  
+
+```
+Layer1.setSPIFrequency(uint32_t frequency);
+```
+Sets the frequency of the SPI bus connected to the LoRa transceiver. Defaults to 100E3.  
+
+```
+Layer1.setLoRaFrequency(uint32_t frequency);
+```
+Sets the frequency at which the LoRa transceiver transmits. Typically 915E6 for NA/SA/AU/NZ or 866E6 for EU, 433E6 is also an option. Defaults to 915E6.   
+
+```
+Layer1.setSpreadingFactor(uint8_t spreadingFactor);
+```
+Sets the spreading factor for the LoRa transceiver. Defaults to 9.  
+
+
+To initialize your Layer 1 interface,  
 ```
 Layer1.init();
 ```

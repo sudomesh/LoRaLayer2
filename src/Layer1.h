@@ -42,6 +42,8 @@ public:
 
     void setPins(int cs, int reset, int dio);
     void setSPIFrequency(uint32_t frequency);
+    void setLoRaFrequency(uint32_t frequency);
+    void setSpreadingFactor(uint8_t spreadingFactor);
 
 private:
     uint8_t hex_digit(char ch);
@@ -57,6 +59,8 @@ private:
     int _resetPin;
     int _DIOPin;
     uint32_t _spiFrequency;
+    uint32_t _loraFrequency;
+    uint8_t _spreadingFactor;
 };
 
 extern Layer1Class Layer1;
