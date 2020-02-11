@@ -37,8 +37,6 @@ uint8_t LL2Class::messageCount(){
 
 int LL2Class::sendToLayer1(struct Packet packet) {
 
-    uint8_t* sending = (uint8_t*) malloc(sizeof(packet));
-    memcpy(sending, &packet, sizeof(packet));
     /*
     int send = 1;
     if(hashingEnabled){
@@ -50,7 +48,7 @@ int LL2Class::sendToLayer1(struct Packet packet) {
         //}
     }
     */
-    Layer1.send_packet((char*) sending, packet.totalLength);
+    Layer1.send_packet((char*)&packet, packet.totalLength);
     _messageCount++;
     return _messageCount;
 }
@@ -157,8 +155,6 @@ void LL2Class::checkInBuffer(){
 struct Packet LL2Class::buildPacket( uint8_t ttl, uint8_t src[6], uint8_t dest[6], uint8_t sequence, uint8_t type, uint8_t data[240], uint8_t dataLength){
 
     uint8_t packetLength = HEADER_LENGTH + dataLength;
-    uint8_t* buffer = (uint8_t*)  malloc(dataLength);
-    buffer = (uint8_t*) data;
     struct Packet packet = {
         ttl,
         packetLength,
@@ -167,7 +163,7 @@ struct Packet LL2Class::buildPacket( uint8_t ttl, uint8_t src[6], uint8_t dest[6
         sequence,
         type 
     };
-    memcpy(&packet.data, buffer, packet.totalLength);
+    memcpy(&packet.data, data, packet.totalLength);
     return packet;
 }
 
