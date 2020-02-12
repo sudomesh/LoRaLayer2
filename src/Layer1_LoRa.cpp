@@ -6,7 +6,6 @@
 
 Layer1Class::Layer1Class() :
 
-    _localAddress(),
     _hashTable(),
     _hashEntry(0),
     _loraInitialized(0),
@@ -37,23 +36,7 @@ int Layer1Class::debug_printf(const char* format, ...) {
     }
 }
 
-uint8_t Layer1Class::hex_digit(char ch){
-  if(( '0' <= ch ) && ( ch <= '9' )){
-    ch -= '0';
-  }else{
-    if(( 'a' <= ch ) && ( ch <= 'f' )){
-      ch += 10 - 'a';
-    }else{
-      if(( 'A' <= ch ) && ( ch <= 'F' ) ){
-        ch += 10 - 'A';
-      }else{
-        ch = 16;
-      }
-    }
-  }
-  return ch;
-}
-
+/*
 uint8_t* Layer1Class::charToHex(char* charString){
     int hexLength = strlen(charString)/2;
     uint8_t hexString[hexLength];
@@ -64,22 +47,7 @@ uint8_t* Layer1Class::charToHex(char* charString){
     uint8_t *hexPtr = hexString;
     return hexPtr;
 }
-
-int Layer1Class::setLocalAddress(char* macString){
-  for( int i = 0; i < sizeof(_localAddress)/sizeof(_localAddress[0]); ++i ){
-    _localAddress[i]  = hex_digit( macString[2*i] ) << 4;
-    _localAddress[i] |= hex_digit( macString[2*i+1] );
-  }
-  if(_localAddress){
-    return 1;
-  }else{
-    return 0;
-  }
-}
-
-uint8_t* Layer1Class::localAddress(){
-    return _localAddress;
-}
+*/
 
 int Layer1Class::getTime(){
     return millis();

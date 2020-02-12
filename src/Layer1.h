@@ -30,8 +30,6 @@ public:
     Layer1Class();
     int debug_printf(const char* format, ...);
     uint8_t* charToHex(char* charString);
-    int setLocalAddress(char* macString);
-    uint8_t* localAddress();
     int getTime();
     int loraInitialized();
     int loraCSPin();
@@ -46,7 +44,6 @@ public:
     void setSpreadingFactor(uint8_t spreadingFactor);
 
 private:
-    uint8_t hex_digit(char ch);
     int isHashNew(char incoming[SHA1_LENGTH]);
     static void onReceive(int packetSize);
 
@@ -102,7 +99,6 @@ private:
 
 private:
     int _transmitting;
-    uint8_t _localAddress[ADDR_LENGTH];
     char* _nodeID;
     uint8_t _hashTable[256][SHA1_LENGTH];
     uint8_t _hashEntry;

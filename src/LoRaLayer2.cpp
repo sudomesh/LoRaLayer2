@@ -10,16 +10,20 @@
 #include <Layer1.h>
 #include <LoRaLayer2.h>
 
+uint8_t _loopbackAddr[ADDR_LENGTH] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+uint8_t _broadcastAddr[ADDR_LENGTH] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
+uint8_t _routingAddr[ADDR_LENGTH] = { 0xaf, 0xff, 0xff, 0xff, 0xff, 0xff };
 
 LL2Class::LL2Class() :
 
     _messageCount(),
+    _localAddress(),
     _packetSuccessWeight(.8),
     _randomMetricWeight(.2),
-    _outBuffer(),
-    _outBufferEntry(0),
-    _inBuffer(),
-    _inBufferEntry(0),
+    _L1OutBuffer(),
+    _L1OutBufferEntry(0),
+    _L1InBuffer(),
+    _L1InBufferEntry(0),
     _neighborTable(),
     _neighborEntry(0),
     _routeTable(),
@@ -33,6 +37,39 @@ LL2Class::LL2Class() :
 
 uint8_t LL2Class::messageCount(){
     return _messageCount;
+}
+
+uint8_t* LL2Class::localAddress(){
+    return _localAddress;
+}
+
+uint8_t LL2Class::hex_digit(char ch){
+  if(( '0' <= ch ) && ( ch <= '9' )){
+    ch -= '0';
+  }else{
+    if(( 'a' <= ch ) && ( ch <= 'f' )){
+      ch += 10 - 'a';
+    }else{
+      if(( 'A' <= ch ) && ( ch <= 'F' ) ){
+        ch += 10 - 'A';
+      }else{
+        ch = 16;
+      }
+    }
+  }
+  return ch;
+}
+
+int LL2Class::setLocalAddress(char* macString){
+  for( int i = 0; i < sizeof(_localAddress)/sizeof(_localAddress[0]); ++i ){
+    _localAddress[i]  = hex_digit( macString[2*i] ) << 4;
+    _localAddress[i] |= hex_digit( macString[2*i+1] );
+  }
+  if(_localAddress){
+    return 1;
+  }else{
+    return 0;
+  }
 }
 
 int LL2Class::sendToLayer1(struct Packet packet) {
@@ -53,117 +90,104 @@ int LL2Class::sendToLayer1(struct Packet packet) {
     return _messageCount;
 }
 
-int LL2Class::pushToOutBuffer(struct Packet packet){
+int LL2Class::pushToL1OutBuffer(struct Packet packet){
 
-    if(_outBufferEntry > 7){
-        _outBufferEntry = 0;
+    if(_L1OutBufferEntry > 7){
+        _L1OutBufferEntry = 0;
     }
-    memset(&_outBuffer[_outBufferEntry], 0, sizeof(_outBuffer[_outBufferEntry]));
-    memcpy(&_outBuffer[_outBufferEntry], &packet, sizeof(_outBuffer[_outBufferEntry]));
-    _outBufferEntry++;
-    return _outBufferEntry;
+    memset(&_L1OutBuffer[_L1OutBufferEntry], 0, sizeof(_L1OutBuffer[_L1OutBufferEntry]));
+    memcpy(&_L1OutBuffer[_L1OutBufferEntry], &packet, sizeof(_L1OutBuffer[_L1OutBufferEntry]));
+    _L1OutBufferEntry++;
+    return _L1OutBufferEntry;
 }
 
-struct Packet LL2Class::popFromOutBuffer(){
+struct Packet LL2Class::popFromL1OutBuffer(){
 
-    _outBufferEntry--;
+    _L1OutBufferEntry--;
     struct Packet pop;
-    memcpy(&pop, &_outBuffer[_outBufferEntry], sizeof(pop));
+    memcpy(&pop, &_L1OutBuffer[_L1OutBufferEntry], sizeof(pop));
     return pop; 
 }
 
-void LL2Class::checkOutBuffer(){
+void LL2Class::checkL1OutBuffer(){
 
-    if (_outBufferEntry > 0){
-        struct Packet packet = popFromOutBuffer();
+    if (_L1OutBufferEntry > 0){
+        struct Packet packet = popFromL1OutBuffer();
         sendToLayer1(packet);
     }
     //else buffer is empty;
 }
 
-int LL2Class::pushToWSBuffer(struct Packet packet){
-    if(_wsBufferEntry > 7){
-        _wsBufferEntry = 0;
+int LL2Class::pushToL3OutBuffer(struct Packet packet){
+    if(_L3OutBufferEntry > 7){
+        _L3OutBufferEntry = 0;
     }
-    memset(&_wsBuffer[_wsBufferEntry], 0, sizeof(_wsBuffer[_wsBufferEntry]));
-    memcpy(&_wsBuffer[_wsBufferEntry], &packet, sizeof(_wsBuffer[_wsBufferEntry]));
-    _wsBufferEntry++;
-    return _wsBufferEntry;
+    memset(&_L3OutBuffer[_L3OutBufferEntry], 0, sizeof(_L3OutBuffer[_L3OutBufferEntry]));
+    memcpy(&_L3OutBuffer[_L3OutBufferEntry], &packet, sizeof(_L3OutBuffer[_L3OutBufferEntry]));
+    _L3OutBufferEntry++;
+    return _L3OutBufferEntry;
 }
 
-struct Packet LL2Class::popFromWSBuffer(){
+struct Packet LL2Class::popFromL3OutBuffer(){
     struct Packet pop = { 0, 0 };
-    if(_wsBufferEntry > 0){
-        _wsBufferEntry--;
-        memcpy(&pop, &_wsBuffer[_wsBufferEntry], sizeof(pop));
+    if(_L3OutBufferEntry > 0){
+        _L3OutBufferEntry--;
+        memcpy(&pop, &_L3OutBuffer[_L3OutBufferEntry], sizeof(pop));
     }
     return pop;
 }
 
-int LL2Class::pushToInBuffer(struct Packet packet){
-    if(_inBufferEntry > 7){
-        _inBufferEntry = 0;
+int LL2Class::pushToL1InBuffer(struct Packet packet){
+    if(_L1InBufferEntry > 7){
+        _L1InBufferEntry = 0;
     }
-    memset(&_inBuffer[_inBufferEntry], 0, sizeof(_inBuffer[_inBufferEntry]));
-    memcpy(&_inBuffer[_inBufferEntry], &packet, sizeof(_inBuffer[_inBufferEntry]));
-    _inBufferEntry++;
-    return _inBufferEntry;
+    memset(&_L1InBuffer[_L1InBufferEntry], 0, sizeof(_L1InBuffer[_L1InBufferEntry]));
+    memcpy(&_L1InBuffer[_L1InBufferEntry], &packet, sizeof(_L1InBuffer[_L1InBufferEntry]));
+    _L1InBufferEntry++;
+    return _L1InBufferEntry;
 }
 
-struct Packet LL2Class::popFromInBuffer(){
+struct Packet LL2Class::popFromL1InBuffer(){
     struct Packet pop = { 0, 0 };
-    if(_inBufferEntry > 0){
-        _inBufferEntry--;
-        memcpy(&pop, &_inBuffer[_inBufferEntry], sizeof(pop));
+    if(_L1InBufferEntry > 0){
+        _L1InBufferEntry--;
+        memcpy(&pop, &_L1InBuffer[_L1InBufferEntry], sizeof(pop));
     }
     return pop;
 }
 
-void LL2Class::checkInBuffer(){
+void LL2Class::checkL1InBuffer(){
 
-    if (_inBufferEntry > 0){
+    if (_L1InBufferEntry > 0){
         struct Metadata metadata; //needs to be retrevied from transceiver
-        struct Packet packet = popFromInBuffer();
-        switch(packet.type){
-            case 'h' :
-                // hello packet;
-                parseHelloPacket(packet, metadata);
-                //printNeighborTable();
-                break;
-            case 'r':
-                // routing packet;
-                parseRoutingPacket(packet, metadata);
-                //printRoutingTable();
-                break;
-            case 'c' :
-                // chat packet
-                parseChatPacket(packet);
-                pushToWSBuffer(packet);
-                //Serial.printf("this is a chat message\n");
-                break;
-            case 'm' :
-                Serial.printf("this is a map message\n");
-                break;
-            default :
-                printPacketInfo(packet);
-                Serial.printf("message type not found\n");
+        struct Packet packet = popFromL1InBuffer();
+        if(memcmp(packet.nextHop, _routingAddr, ADDR_LENGTH) == 0){
+            // packet contains routing table info
+            parseForRoutes(packet, metadata);
+        }else if(memcmp(packet.nextHop, localAddress(), ADDR_LENGTH) == 0 || 
+                 memcmp(packet.nextHop, _broadcastAddr, ADDR_LENGTH) == 0){
+            // packet is meant for me (or everyone)
+            pushToL3OutBuffer(packet);
+        }else{
+            // packet is meant for someone else
+            routePacket(packet, 0);
         }
     }
     //else buffer is empty;
 }
 
-struct Packet LL2Class::buildPacket( uint8_t ttl, uint8_t src[6], uint8_t dest[6], uint8_t sequence, uint8_t type, uint8_t data[240], uint8_t dataLength){
+struct Packet LL2Class::buildPacket(uint8_t ttl, uint8_t next[6], uint8_t data[DATA_LENGTH], uint8_t dataLength){
 
     uint8_t packetLength = HEADER_LENGTH + dataLength;
+    uint8_t* src = localAddress();
     struct Packet packet = {
         ttl,
         packetLength,
         src[0], src[1], src[2], src[3], src[4], src[5],
-        dest[0], dest[1], dest[2], dest[3], dest[4], dest[5],
-        sequence,
-        type 
+        next[0], next[1], next[2], next[3], next[4], next[5],
+        messageCount()
     };
-    memcpy(&packet.data, data, packet.totalLength);
+    memcpy(packet.data, data, dataLength);
     return packet;
 }
 
@@ -174,7 +198,6 @@ void LL2Class::printMetadata(struct Metadata metadata){
 
 void LL2Class::printPacketInfo(struct Packet packet){
 
-    Serial.printf("\r\n");
     Serial.printf("ttl: %d\r\n", packet.ttl);
     Serial.printf("length: %d\r\n", packet.totalLength);
     Serial.printf("source: ");
@@ -184,15 +207,15 @@ void LL2Class::printPacketInfo(struct Packet packet){
     Serial.printf("\r\n");
     Serial.printf("destination: ");
     for(int i = 0 ; i < ADDR_LENGTH ; i++){
-        Serial.printf("%x", packet.destination[i]);
+        Serial.printf("%x", packet.nextHop[i]);
     }
     Serial.printf("\r\n");
     Serial.printf("sequence: %02x\r\n", packet.sequence);
-    Serial.printf("type: %c\r\n", packet.type);
     Serial.printf("data: ");
     for(int i = 0 ; i < packet.totalLength-HEADER_LENGTH ; i++){
         Serial.printf("%02x", packet.data[i]);
     }
+    Serial.printf("\r\n");
     Serial.printf("\r\n");
 }
 
@@ -295,7 +318,7 @@ int LL2Class::checkRoutingTable(struct RoutingTableEntry route){
 
     int entry = _routeEntry; // assume this is a new route
     for( int i = 0 ; i < _routeEntry ; i++){
-        if(memcmp(route.destination, Layer1.localAddress(), sizeof(route.destination)) == 0){
+        if(memcmp(route.destination, localAddress(), sizeof(route.destination)) == 0){
             //this is me don't add to routing table 
             //Layer1.debug_printf("this route is my local address\n");
             entry = -1;
@@ -358,35 +381,18 @@ int LL2Class::updateRouteTable(struct RoutingTableEntry route, int entry){
     return entry;
 }
 
-int LL2Class::selectRoute(struct Packet packet){
+int LL2Class::selectRoute(uint8_t destination[6]){
 
     int entry = -1;
     for( int i = 0 ; i < _routeEntry ; i++){
-        if(memcmp(packet.destination, _routeTable[i].destination, sizeof(packet.destination)) == 0){
+        if(memcmp(destination, _routeTable[i].destination, sizeof(destination)) == 0){
             entry = i;
         }
     }
     return entry;
 }
 
-void LL2Class::retransmitRoutedPacket(struct Packet packet, struct RoutingTableEntry route){
-
-    // decrement ttl
-    packet.ttl--;
-    Serial.printf("retransmitting\n");
-    uint8_t data[240];
-    int dataLength = 0;
-    for( int i = 0 ; i < ADDR_LENGTH ; i++){
-        data[dataLength] = route.nextHop[i];
-        dataLength++;
-    }
-    struct Packet newMessage = buildPacket(packet.ttl, packet.source, packet.destination, packet.sequence, packet.type, data, dataLength); 
-
-    // queue packet to be transmitted
-    pushToOutBuffer(newMessage);
-}
-
-int LL2Class::parseHelloPacket(struct Packet packet, struct Metadata metadata){
+int LL2Class::parseForNeighbor(struct Packet packet, struct Metadata metadata){
 
     struct NeighborTableEntry neighbor;
     memcpy(neighbor.address, packet.source, sizeof(neighbor.address));
@@ -416,11 +422,11 @@ int LL2Class::parseHelloPacket(struct Packet packet, struct Metadata metadata){
     return n_entry;
 }
 
-int LL2Class::parseRoutingPacket(struct Packet packet, struct Metadata metadata){
+int LL2Class::parseForRoutes(struct Packet packet, struct Metadata metadata){
     int numberOfRoutes = (packet.totalLength - HEADER_LENGTH) / (ADDR_LENGTH+2);
     Layer1.debug_printf("routes in packet: %d\n", numberOfRoutes);
 
-    int n_entry = parseHelloPacket(packet, metadata);
+    int n_entry = parseForNeighbor(packet, metadata);
 
     for( int i = 0 ; i < numberOfRoutes ; i++){
         struct RoutingTableEntry route; 
@@ -448,28 +454,6 @@ int LL2Class::parseRoutingPacket(struct Packet packet, struct Metadata metadata)
     return numberOfRoutes;
 }
 
-void LL2Class::parseChatPacket(struct Packet packet){
-    
-    if(memcmp(packet.destination, Layer1.localAddress(), sizeof(packet.destination)) == 0){
-        Serial.printf("this message is for me\n");
-        return;
-    }
-    uint8_t nextHop[ADDR_LENGTH];
-    memcpy(nextHop, packet.data, sizeof(nextHop));
-    if(memcmp(nextHop, Layer1.localAddress(), sizeof(nextHop)) == 0){
-        Serial.printf("I am the next hop ");
-        int entry = selectRoute(packet);
-        if(entry == -1){
-            Serial.printf(" but I don't have a route\n");
-        }else{
-            Serial.printf(" and I have a route RETRANSMIT\n");
-            retransmitRoutedPacket(packet, _routeTable[entry]);
-        }
-    }else{
-        Serial.printf("I am not the next hop, packet dropped\n");
-    }
-}
-    
 int LL2Class::packetReceived(char* data, size_t len) {
 
     data[len] = '\0';
@@ -499,27 +483,12 @@ int LL2Class::packetReceived(char* data, size_t len) {
         byteData[15],
     };
     memcpy(packet.data, byteData + HEADER_LENGTH, packet.totalLength-HEADER_LENGTH);
-    pushToInBuffer(packet);
+    pushToL1InBuffer(packet);
     return 0;
 }
 
-long LL2Class::transmitHello(long interval, long lastTime){
-
-    long newLastTime = 0;
-    if (Layer1.getTime() - lastTime > interval) {
-        uint8_t data[240] = "Hola";
-        int dataLength = 4;
-        //TODO: add randomness to message to avoid hashisng issues
-        uint8_t destination[6] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
-        struct Packet helloMessage = buildPacket(1, Layer1.localAddress(), destination, _messageCount, 'h', data, dataLength);
-        pushToOutBuffer(helloMessage);
-        newLastTime = Layer1.getTime();
-    }
-    return newLastTime;
-}
-
 struct Packet LL2Class::buildRoutingPacket(){
-    uint8_t data[240];
+    uint8_t data[DATA_LENGTH];
     int dataLength = 0;
     int routesPerPacket = _routeEntry;
     if (_routeEntry >= MAX_ROUTES_PER_PACKET-1){
@@ -535,62 +504,61 @@ struct Packet LL2Class::buildRoutingPacket(){
         data[dataLength] = _routeTable[i].metric;
         dataLength++;
     }
-    Layer1.debug_printf("Sending data: ");
-    for(int i = 0 ; i < dataLength ; i++){
-        Layer1.debug_printf("%02x ", data[i]);
-    }
-    Layer1.debug_printf("\n");
-    uint8_t destination[6] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
-    struct Packet routePacket = buildPacket(1, Layer1.localAddress(), destination, _messageCount, 'r', data, dataLength);
-    return routePacket;
-}
-
-
-long LL2Class::transmitToRoute(long interval, long lastTime, int dest){
-    long newLastTime = 0;
-    if (Layer1.getTime() - lastTime > interval) {
-        if (_routeEntry == 0){
-            Serial.printf("trying to send but I have no routes ");
-            newLastTime = Layer1.getTime();
-            return newLastTime;
-        }
-
-        uint8_t destination[ADDR_LENGTH];
-        memcpy(destination, &_routeTable[dest].destination, sizeof(destination));
-
-        Serial.printf("trying to send a random message to ");
-        for( int j = 0 ; j < ADDR_LENGTH ; j++){
-            Serial.printf("%02x", _routeTable[dest].destination[j]);
-        }
-        Serial.printf(" via ");
-        for( int j = 0 ; j < ADDR_LENGTH ; j++){
-            Serial.printf("%02x", _routeTable[dest].nextHop[j]);
-        }
-        Serial.printf("\n");
-
-        uint8_t data[240];
-        int dataLength = 0;
-        for( int i = 0 ; i < ADDR_LENGTH ; i++){
-            data[dataLength] = _routeTable[dest].nextHop[i];
-            dataLength++;
-        }
-        struct Packet randomMessage = buildPacket(32, Layer1.localAddress(), destination, _messageCount, 'c', data, dataLength);
-        pushToOutBuffer(randomMessage);
-        _messageCount++;
-        newLastTime = Layer1.getTime();
-    }
-    return newLastTime;
+    uint8_t nextHop[6] = { 0xaf, 0xff, 0xff, 0xff, 0xff, 0xff };
+    struct Packet packet = buildPacket(1, nextHop, data, dataLength);
+    return packet;
 }
 
 int LL2Class::getRouteEntry(){
     return _routeEntry;
 }
 
-int LL2Class::sendToLayer2(uint8_t dest[6], uint8_t type, uint8_t data[240], uint8_t dataLength){
-    uint8_t ttl = DEFAULT_TTL
-    struct Packet packet = buildPacket(ttl, Layer1.localAddress(), dest, messageCount(), type, data, dataLength);
-    pushToOutBuffer(packet);
+int LL2Class::routePacket(struct Packet packet, int broadcast){
+    uint8_t ttl = packet.ttl--;
+    uint8_t nextHop[ADDR_LENGTH];
+    uint8_t destination[ADDR_LENGTH];
+    memcpy(destination, packet.data, ADDR_LENGTH);
+    if(ttl <= 0){
+        // time to live expired
+        return 1;
+    }
+    if(memcmp(destination, _loopbackAddr, ADDR_LENGTH) == 0){
+        //Loopback
+        Serial.printf("LL2Class::sendToLayer2 loopback packet\r\n");
+        // this should push back into the L3 buffer
+        return 1;
+    }else if(memcmp(destination, _broadcastAddr, ADDR_LENGTH) == 0){
+        //Broadcast packet, only forward if explicity told to
+        Serial.printf("LL2Class::sendToLayer2 broadcast packet\r\n");
+        if(broadcast == 1){
+            memcpy(nextHop, _broadcastAddr, ADDR_LENGTH);
+        }else{
+            return 1;
+        }
+    }else{
+        Serial.printf("LL2Class::sendToLayer2 routed packet\r\n");
+        int entry = selectRoute(destination);
+        if(entry == -1){
+            // No route found
+            return 1;
+        }else{
+            // Route found
+            memcpy(nextHop, _routeTable[entry].nextHop, ADDR_LENGTH);
+        }
+    }
+    // rebuild packet with new ttl and nextHop
+    struct Packet newPacket = buildPacket(ttl, nextHop, packet.data, packet.totalLength-HEADER_LENGTH);
+    pushToL1OutBuffer(newPacket);
     return 0;
+}
+
+int LL2Class::sendToLayer2(uint8_t data[DATA_LENGTH], uint8_t dataLength){
+
+    uint8_t ttl = DEFAULT_TTL+1;
+    uint8_t nextHop[ADDR_LENGTH];
+    // build a dummy packet to pass to routePacket()
+    struct Packet packet = buildPacket(ttl, nextHop, data, dataLength);
+    return routePacket(packet, 1);
 }
 
 int LL2Class::init(){
@@ -612,14 +580,27 @@ long LL2Class::setInterval(long interval){
 int LL2Class::daemon(){
     if (Layer1.getTime() - _lastRoutingTime > _routingInterval && _disableRoutingPackets == 0) {
         Layer1.debug_printf("number of routes before transmit: %d\n", _routeEntry);
-        struct Packet packet = buildRoutingPacket();
-        pushToOutBuffer(packet);
-        pushToWSBuffer(packet);
+        struct Packet routingPacket = buildRoutingPacket();
+        pushToL1OutBuffer(routingPacket);
+
+        // this is a hack to send the routing table up to Layer3
+        struct Packet packet = routingPacket;
+        packet.totalLength += 11;
+        memcpy(packet.data, &_broadcastAddr, ADDR_LENGTH);
+        packet.data[6] = 'r';
+        packet.data[7] = 0x0;
+        packet.data[8] = 0x0;
+        packet.data[9] = 'r';
+        packet.data[10] = '|';
+        memcpy(packet.data+11, routingPacket.data, routingPacket.totalLength-HEADER_LENGTH);
+        printPacketInfo(packet);
+        pushToL3OutBuffer(packet);
+
         _lastRoutingTime = Layer1.getTime();
         return 1;
     }
-    checkOutBuffer();
-    checkInBuffer();
+    checkL1OutBuffer();
+    checkL1InBuffer();
     return 0;
 }
 

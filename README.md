@@ -53,16 +53,6 @@ To initialize your Layer 1 interface,
 Layer1.init();
 ```
 
-Manually set the local address of your node,
-```
-Layer1.setLocalAddress(char* macString)
-```
-
-Retreive the current local address of your node,
-```
-unint8_t* mac = Layer1.localAddress()
-```
-
 Get the current time on your Layer 1 device as this may change from device to device (to simulator), 
 ```
 int time = Layer1.getTime()
@@ -108,9 +98,19 @@ Get the current message count, i.e. the number of messages sent by the device si
 uint8_t count = LL2.messageCount()
 ```
 
-Get the lastest chat message from its LL2 buffer, 
+Manually set the local address of your node,
 ```
-struct Packet packet = LL2.popFromChatBuffer()
+LL2.setLocalAddress(char* macString)
+```
+
+Retreive the current local address of your node,
+```
+unint8_t* mac = LL2.localAddress()
+```
+
+Get the lastest packet meant for Layer3 from its LL2 buffer, 
+```
+struct Packet packet = LL2.popFromL3OutBuffer()
 ```
 returns entire LL2 packet
 
