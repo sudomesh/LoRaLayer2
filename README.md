@@ -47,6 +47,11 @@ Layer1.setSpreadingFactor(uint8_t spreadingFactor);
 ```
 Sets the spreading factor for the LoRa transceiver. Defaults to 9.  
 
+```
+Layer1.setTxPower(int txPower);
+```
+Sets the transmit power for the LoRa transceiver. Defaults to 17.  
+
 
 To initialize your Layer 1 interface,  
 ```

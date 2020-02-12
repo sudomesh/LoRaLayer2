@@ -42,6 +42,7 @@ public:
     void setSPIFrequency(uint32_t frequency);
     void setLoRaFrequency(uint32_t frequency);
     void setSpreadingFactor(uint8_t spreadingFactor);
+    void setTxPower(int txPower);
 
 private:
     int isHashNew(char incoming[SHA1_LENGTH]);
@@ -58,6 +59,7 @@ private:
     uint32_t _spiFrequency;
     uint32_t _loraFrequency;
     uint8_t _spreadingFactor;
+    int _txPower;
 };
 
 extern Layer1Class Layer1;

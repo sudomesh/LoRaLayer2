@@ -15,7 +15,8 @@ Layer1Class::Layer1Class() :
     _DIOPin(L1_DEFAULT_DIO0_PIN),
     _spiFrequency(100E3),
     _loraFrequency(915E6),
-    _spreadingFactor(9)
+    _spreadingFactor(9),
+    _txPower(17)
 
 {
 
@@ -120,10 +121,15 @@ void Layer1Class::setSpreadingFactor(uint8_t spreadingFactor){
     _spreadingFactor = spreadingFactor;
 }
 
+void Layer1Class::setTxPower(int txPower){
+    _txPower = txPower;
+}
+
 int Layer1Class::init(){ // maybe this should take the pins and spreading factor as inputs?
 
     LoRa.setPins(_csPin, _resetPin, _DIOPin); // set CS, reset, DIO pin
     LoRa.setSPIFrequency(_spiFrequency);
+    LoRa.setTxPower(_txPower);
 
     if (!LoRa.begin(_loraFrequency)) {             // initialize ratio at 915 MHz
         return _loraInitialized;
