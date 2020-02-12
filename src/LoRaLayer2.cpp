@@ -524,19 +524,16 @@ int LL2Class::routePacket(struct Packet packet, int broadcast){
     }
     if(memcmp(destination, _loopbackAddr, ADDR_LENGTH) == 0){
         //Loopback
-        Serial.printf("LL2Class::sendToLayer2 loopback packet\r\n");
         // this should push back into the L3 buffer
         return 1;
     }else if(memcmp(destination, _broadcastAddr, ADDR_LENGTH) == 0){
         //Broadcast packet, only forward if explicity told to
-        Serial.printf("LL2Class::sendToLayer2 broadcast packet\r\n");
         if(broadcast == 1){
             memcpy(nextHop, _broadcastAddr, ADDR_LENGTH);
         }else{
             return 1;
         }
     }else{
-        Serial.printf("LL2Class::sendToLayer2 routed packet\r\n");
         int entry = selectRoute(destination);
         if(entry == -1){
             // No route found
@@ -593,7 +590,6 @@ int LL2Class::daemon(){
         packet.data[9] = 'r';
         packet.data[10] = '|';
         memcpy(packet.data+11, routingPacket.data, routingPacket.totalLength-HEADER_LENGTH);
-        printPacketInfo(packet);
         pushToL3OutBuffer(packet);
 
         _lastRoutingTime = Layer1.getTime();
