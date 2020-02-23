@@ -43,6 +43,18 @@ uint8_t* LL2Class::localAddress(){
     return _localAddress;
 }
 
+uint8_t* LL2Class::broadcastAddr(){
+    return _broadcastAddr;
+}
+
+uint8_t* LL2Class::loopbackAddr(){
+    return _loopbackAddr;
+}
+
+uint8_t* LL2Class::routingAddr(){
+    return _routingAddr;
+}
+
 uint8_t LL2Class::hex_digit(char ch){
   if(( '0' <= ch ) && ( ch <= '9' )){
     ch -= '0';

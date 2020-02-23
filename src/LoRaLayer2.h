@@ -45,6 +45,9 @@ class LL2Class {
 public:
     LL2Class();
     uint8_t messageCount();
+    uint8_t* broadcastAddr();
+    uint8_t* loopbackAddr();
+    uint8_t* routingAddr();
     uint8_t hex_digit(char ch);
     int setLocalAddress(char* macString);
     uint8_t* localAddress();
