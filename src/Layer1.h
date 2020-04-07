@@ -6,7 +6,6 @@
 #define STDOUT 1
 #define DEBUG 0
 #define SHA1_LENGTH 40
-#define ADDR_LENGTH 6 
 
 #define LORA // to use Layer1_LoRa.cpp
 //#define SIM // to use Layer1_Sim.cpp
@@ -49,7 +48,6 @@ private:
     static void onReceive(int packetSize);
 
 private:
-    uint8_t _localAddress[ADDR_LENGTH];
     uint8_t _hashTable[256][SHA1_LENGTH];
     int _hashEntry;
     int _loraInitialized;

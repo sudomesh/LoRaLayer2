@@ -2,12 +2,12 @@
 #include <stdint.h>
 
 //#define DEBUG 0
-#define HEADER_LENGTH 15
+#define HEADER_LENGTH 11
 #define PACKET_LENGTH 256
 #define DATA_LENGTH 241
 #define SHA1_LENGTH 40
-#define ADDR_LENGTH 6 
-#define MAX_ROUTES_PER_PACKET 30
+#define ADDR_LENGTH 4
+#define MAX_ROUTES_PER_PACKET 40 
 #define ASYNC_TX 1;
 #define DEFAULT_TTL 30;
 

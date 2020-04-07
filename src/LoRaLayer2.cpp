@@ -10,9 +10,9 @@
 #include <Layer1.h>
 #include <LoRaLayer2.h>
 
-uint8_t _loopbackAddr[ADDR_LENGTH] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-uint8_t _broadcastAddr[ADDR_LENGTH] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
-uint8_t _routingAddr[ADDR_LENGTH] = { 0xaf, 0xff, 0xff, 0xff, 0xff, 0xff };
+uint8_t _loopbackAddr[ADDR_LENGTH] = { 0x00, 0x00, 0x00, 0x00 };
+uint8_t _broadcastAddr[ADDR_LENGTH] = { 0xff, 0xff, 0xff, 0xff };
+uint8_t _routingAddr[ADDR_LENGTH] = { 0xaf, 0xff, 0xff, 0xff };
 
 LL2Class::LL2Class() :
 
@@ -188,15 +188,15 @@ void LL2Class::checkL1InBuffer(){
     //else buffer is empty;
 }
 
-struct Packet LL2Class::buildPacket(uint8_t ttl, uint8_t next[6], uint8_t data[DATA_LENGTH], uint8_t dataLength){
+struct Packet LL2Class::buildPacket(uint8_t ttl, uint8_t next[ADDR_LENGTH], uint8_t data[DATA_LENGTH], uint8_t dataLength){
 
     uint8_t packetLength = HEADER_LENGTH + dataLength;
     uint8_t* src = localAddress();
     struct Packet packet = {
         ttl,
         packetLength,
-        src[0], src[1], src[2], src[3], src[4], src[5],
-        next[0], next[1], next[2], next[3], next[4], next[5],
+        src[0], src[1], src[2], src[3],
+        next[0], next[1], next[2], next[3],
         messageCount()
     };
     memcpy(packet.data, data, dataLength);
@@ -278,7 +278,7 @@ void LL2Class::debug_printAddress(uint8_t address[ADDR_LENGTH]){
 
 uint8_t LL2Class::calculatePacketLoss(int entry, uint8_t sequence){
 
-    uint8_t packet_loss;
+    uint8_t packet_loss = 0xFF;
     uint8_t sequence_diff = sequence - _neighborTable[entry].lastReceived;
     if(sequence_diff == 0){
         // this is first packet received from neighbor
@@ -291,11 +291,9 @@ uint8_t LL2Class::calculatePacketLoss(int entry, uint8_t sequence){
     }else if(sequence_diff > 1 && sequence_diff < 16){
         // decrease packet success rate by difference
         packet_loss = 0x10 * sequence_diff; 
-    }else if(sequence_diff > 16){
-        // no packet received recently
-        // assume complete pakcet loss
-        packet_loss = 0xFF; 
     }
+    // no packet received recently
+    // assume complete packet loss
     return packet_loss;
 }
 
@@ -393,11 +391,11 @@ int LL2Class::updateRouteTable(struct RoutingTableEntry route, int entry){
     return entry;
 }
 
-int LL2Class::selectRoute(uint8_t destination[6]){
+int LL2Class::selectRoute(uint8_t destination[ADDR_LENGTH]){
 
     int entry = -1;
     for( int i = 0 ; i < _routeEntry ; i++){
-        if(memcmp(destination, _routeTable[i].destination, sizeof(destination)) == 0){
+        if(memcmp(destination, _routeTable[i].destination, ADDR_LENGTH) == 0){
             entry = i;
         }
     }
@@ -489,10 +487,9 @@ int LL2Class::packetReceived(char* data, size_t len) {
     struct Packet packet = {
         byteData[0],
         byteData[1], 
-        byteData[2], byteData[3], byteData[4], byteData[5], byteData[6], byteData[7],
-        byteData[8], byteData[9], byteData[10], byteData[11], byteData[12], byteData[13],
-        byteData[14],
-        byteData[15],
+        byteData[2], byteData[3], byteData[4], byteData[5],
+        byteData[6], byteData[7], byteData[8], byteData[9],
+        byteData[10],
     };
     memcpy(packet.data, byteData + HEADER_LENGTH, packet.totalLength-HEADER_LENGTH);
     pushToL1InBuffer(packet);
@@ -516,7 +513,7 @@ struct Packet LL2Class::buildRoutingPacket(){
         data[dataLength] = _routeTable[i].metric;
         dataLength++;
     }
-    uint8_t nextHop[6] = { 0xaf, 0xff, 0xff, 0xff, 0xff, 0xff };
+    uint8_t nextHop[ADDR_LENGTH] = { 0xaf, 0xff, 0xff, 0xff };
     struct Packet packet = buildPacket(1, nextHop, data, dataLength);
     return packet;
 }
@@ -563,7 +560,7 @@ int LL2Class::routePacket(struct Packet packet, int broadcast){
 
 int LL2Class::sendToLayer2(uint8_t data[DATA_LENGTH], uint8_t dataLength){
 
-    uint8_t ttl = DEFAULT_TTL+1;
+    uint8_t ttl = DEFAULT_TTL;
     uint8_t nextHop[ADDR_LENGTH];
     // build a dummy packet to pass to routePacket()
     struct Packet packet = buildPacket(ttl, nextHop, data, dataLength);
@@ -596,12 +593,12 @@ int LL2Class::daemon(){
         struct Packet packet = routingPacket;
         packet.totalLength += 11;
         memcpy(packet.data, &_broadcastAddr, ADDR_LENGTH);
-        packet.data[6] = 'r';
-        packet.data[7] = 0x0;
-        packet.data[8] = 0x0;
-        packet.data[9] = 'r';
-        packet.data[10] = '|';
-        memcpy(packet.data+11, routingPacket.data, routingPacket.totalLength-HEADER_LENGTH);
+        packet.data[4] = 'r';
+        packet.data[5] = 0x0;
+        packet.data[6] = 0x0;
+        packet.data[7] = 'r';
+        packet.data[8] = '|';
+        memcpy(packet.data+9, routingPacket.data, routingPacket.totalLength-HEADER_LENGTH);
         pushToL3OutBuffer(packet);
 
         _lastRoutingTime = Layer1.getTime();
