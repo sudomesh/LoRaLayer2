@@ -37,19 +37,6 @@ int Layer1Class::debug_printf(const char* format, ...) {
     }
 }
 
-/*
-uint8_t* Layer1Class::charToHex(char* charString){
-    int hexLength = strlen(charString)/2;
-    uint8_t hexString[hexLength];
-    for( int i = 0 ; i < hexLength ; ++i ){
-        hexString[i]  = hex_digit(charString[2*i]) << 4;
-        hexString[i] |= hex_digit(charString[2*i+1]);
-    }
-    uint8_t *hexPtr = hexString;
-    return hexPtr;
-}
-*/
-
 int Layer1Class::getTime(){
     return millis();
 }
@@ -143,7 +130,7 @@ int Layer1Class::init(){ // maybe this should take the pins and spreading factor
     return _loraInitialized;
 }
 
-int Layer1Class::send_packet(char* data, int len){
+void Layer1Class::send_packet(char* data, int len){
 
     //Serial.printf("Sending: ");
     if(LoRa.beginPacket()){

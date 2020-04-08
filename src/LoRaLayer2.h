@@ -55,9 +55,8 @@ public:
     int sendToLayer2(uint8_t data[DATA_LENGTH], uint8_t dataLength);
     struct Packet popFromL3OutBuffer();
     struct Packet buildPacket(uint8_t ttl, uint8_t next[ADDR_LENGTH], uint8_t data[DATA_LENGTH], uint8_t dataLength);
-    void printAddress(uint8_t address[ADDR_LENGTH]);
-    void printRoutingTable();
-    void debug_printAddress(uint8_t address[ADDR_LENGTH]);
+    void getNeighborTable(char *out);
+    void getRoutingTable(char *out);
     int packetReceived(char* data, size_t len);
     int daemon();
     int getRouteEntry();
@@ -70,9 +69,6 @@ private:
     int pushToL3OutBuffer(struct Packet packet);
     int pushToL1InBuffer(struct Packet packet);
     struct Packet popFromL1InBuffer();
-    void printMetadata(struct Metadata metadata);
-    void printPacketInfo(struct Packet packet);
-    void printNeighborTable();
     struct Packet buildRoutingPacket();
     void checkL1OutBuffer();
     void checkL1InBuffer();

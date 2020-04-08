@@ -203,77 +203,35 @@ struct Packet LL2Class::buildPacket(uint8_t ttl, uint8_t next[ADDR_LENGTH], uint
     return packet;
 }
 
-void LL2Class::printMetadata(struct Metadata metadata){
-    Serial.printf("RSSI: %x\n", metadata.rssi);
-    Serial.printf("SNR: %x\n", metadata.snr);
-}
-
-void LL2Class::printPacketInfo(struct Packet packet){
-
-    Serial.printf("ttl: %d\r\n", packet.ttl);
-    Serial.printf("length: %d\r\n", packet.totalLength);
-    Serial.printf("source: ");
-    for(int i = 0 ; i < ADDR_LENGTH ; i++){
-        Serial.printf("%x", packet.source[i]);
-    }
-    Serial.printf("\r\n");
-    Serial.printf("destination: ");
-    for(int i = 0 ; i < ADDR_LENGTH ; i++){
-        Serial.printf("%x", packet.nextHop[i]);
-    }
-    Serial.printf("\r\n");
-    Serial.printf("sequence: %02x\r\n", packet.sequence);
-    Serial.printf("data: ");
-    for(int i = 0 ; i < packet.totalLength-HEADER_LENGTH ; i++){
-        Serial.printf("%02x", packet.data[i]);
-    }
-    Serial.printf("\r\n");
-    Serial.printf("\r\n");
-}
-
-void LL2Class::printNeighborTable(){
-
-    Serial.printf("\n");
-    Serial.printf("Neighbor Table:\n");
+void LL2Class::getNeighborTable(char *out){
+    char* buf = out;
+    buf += sprintf(buf, "Neighbor Table:\n");
     for( int i = 0 ; i < _neighborEntry ; i++){
         for(int j = 0 ; j < ADDR_LENGTH ; j++){
-            Serial.printf("%02x", _neighborTable[i].address[j]);
+            buf += sprintf(buf, "%02x", _neighborTable[i].address[j]);
         }
-        Serial.printf(" %3d ", _neighborTable[i].metric);
-        Serial.printf("\n");
+        buf += sprintf(buf, " %3d ", _neighborTable[i].metric);
+        buf += sprintf(buf, "\r\n");
     }
-    Serial.printf("\n");
+    buf += sprintf(buf, "\0");
 }
 
-void LL2Class::printRoutingTable(){
-
-    Serial.printf("\r\n");
-    Serial.printf("Routing Table: total routes %d\r\n", _routeEntry);
+void LL2Class::getRoutingTable(char *out){
+    char* buf = out;
+    buf += sprintf(buf, "Routing Table: total routes %d\r\n", _routeEntry);
     for( int i = 0 ; i < _routeEntry ; i++){
-        Serial.printf("%d hops from ", _routeTable[i].distance);
+        buf += sprintf(buf, "%d hops from ", _routeTable[i].distance);
         for(int j = 0 ; j < ADDR_LENGTH ; j++){
-            Serial.printf("%02x", _routeTable[i].destination[j]);
+            buf += sprintf(buf, "%02x", _routeTable[i].destination[j]);
         }
-        Serial.printf(" via ");
+        buf += sprintf(buf, " via ");
         for(int j = 0 ; j < ADDR_LENGTH ; j++){
-            Serial.printf("%02x", _routeTable[i].nextHop[j]);
+            buf += sprintf(buf, "%02x", _routeTable[i].nextHop[j]);
         }
-        Serial.printf(" metric %3d ", _routeTable[i].metric);
-        Serial.printf("\r\n");
+        buf += sprintf(buf, " metric %3d ", _routeTable[i].metric);
+        buf += sprintf(buf, "\r\n");
     }
-    Serial.printf("\r\n");
-}
-
-void LL2Class::printAddress(uint8_t address[ADDR_LENGTH]){
-    for( int i = 0 ; i < ADDR_LENGTH; i++){
-        Serial.printf("%02x", address[i]);
-    }
-}
-
-void LL2Class::debug_printAddress(uint8_t address[ADDR_LENGTH]){
-    for( int i = 0 ; i < ADDR_LENGTH; i++){
-        Layer1.debug_printf("%02x", address[i]);
-    }
+    buf += sprintf(buf, "\0");
 }
 
 uint8_t LL2Class::calculatePacketLoss(int entry, uint8_t sequence){
@@ -301,13 +259,9 @@ uint8_t LL2Class::calculateMetric(int entry, uint8_t sequence, struct Metadata m
 
     float weightedPacketSuccess =  ((float) _neighborTable[entry].packet_success)*_packetSuccessWeight;
     float weightedRandomness =  ((float) metadata.randomness)*_randomMetricWeight;
-    //float weightedRSSI =  ((float) metadata.rssi)*RSSIWeight;
-    //float weightedSNR =  ((float) metadata.snr)*SNRWeight;
     uint8_t metric = weightedPacketSuccess+weightedRandomness;
     Layer1.debug_printf("weighted packet success: %3f\n", weightedPacketSuccess);
     Layer1.debug_printf("weighted randomness: %3f\n", weightedRandomness);
-    //Layer1.debug_printf("weighted RSSI: %3f\n", weightedRSSI);
-    //Layer1.debug_printf("weighted SNR: %3f\n", weightedSNR);
     Layer1.debug_printf("metric calculated: %3d\n", metric);
     return metric;
 }
@@ -365,29 +319,29 @@ int LL2Class::checkRoutingTable(struct RoutingTableEntry route){
 
 int LL2Class::updateNeighborTable(struct NeighborTableEntry neighbor, int entry){
 
+    // copy neighbor into specified entry in neighbor table
     memset(&_neighborTable[entry], 0, sizeof(_neighborTable[entry]));
     memcpy(&_neighborTable[entry], &neighbor, sizeof(_neighborTable[entry]));
     if(entry == _neighborEntry){
+        // if specified entry is the same as current count of neighbors
+        // this is a new neighbor, increment neighbor count
         _neighborEntry++;
-        Layer1.debug_printf("new neighbor found: ");
-    }else{
-        Layer1.debug_printf("neighbor updated! ");
     }
+    //else neighbor is just updated
     return entry;
 }
 
 int LL2Class::updateRouteTable(struct RoutingTableEntry route, int entry){
 
+    // copy route into specified entry in routing table
     memset(&_routeTable[entry], 0, sizeof(_routeTable[entry]));
     memcpy(&_routeTable[entry], &route, sizeof(_routeTable[entry]));
     if(entry == _routeEntry){
+        // if specified entry is the same as current count of routes
+        // this is a new route, increment route count
         _routeEntry++;
-        Layer1.debug_printf("new route found! ");
-    }else{
-        Layer1.debug_printf("route updated! ");
     }
-    debug_printAddress(_routeTable[entry].destination);
-    Layer1.debug_printf("\n");
+    //else route is just updated
     return entry;
 }
 
@@ -421,9 +375,7 @@ int LL2Class::parseForNeighbor(struct Packet packet, struct Metadata metadata){
     route.metric = _neighborTable[n_entry].metric;
     int r_entry = checkRoutingTable(route);
     if(r_entry == -1){
-        Layer1.debug_printf("do nothing, already have better route to ");
-        debug_printAddress(route.destination);
-        Layer1.debug_printf("\n");
+        //do nothing, already have better route
     }else{
         //if(_routeEntry <= 30){
         updateRouteTable(route, r_entry);
@@ -448,9 +400,7 @@ int LL2Class::parseForRoutes(struct Packet packet, struct Metadata metadata){
 
         int entry = checkRoutingTable(route);
         if(entry == -1){
-            Layer1.debug_printf("do nothing, already have route to ");
-            debug_printAddress(route.destination);
-            Layer1.debug_printf("\r\n");
+            // do nothing, already have route
         }else{
             // average neighbor metric with rest of route metric
             float hopRatio = 1/((float)route.distance);
@@ -475,15 +425,6 @@ int LL2Class::packetReceived(char* data, size_t len) {
     // convert ASCII data to pure bytes
     uint8_t* byteData = ( uint8_t* ) data;
     
-    // randomly generate RSSI and SNR values 
-    // see https://github.com/sudomesh/disaster-radio-simulator/issues/3
-    //uint8_t packet_rssi = rand() % (256 - 128) + 128;
-    //uint8_t packet_snr = rand() % (256 - 128) + 128;
-    // articial packet loss
-    //uint8_t packet_randomness = rand() % (256 - 128) + 128;
-    //struct Metadata metadata;
-    //TODO save metadata and store with the packet in the inBuffer
-
     struct Packet packet = {
         byteData[0],
         byteData[1], 

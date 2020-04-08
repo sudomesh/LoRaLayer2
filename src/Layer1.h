@@ -35,7 +35,7 @@ public:
     int resetPin();
     int DIOPin();
     int init();
-    int send_packet(char* data, int len);
+    void send_packet(char* data, int len);
 
     void setPins(int cs, int reset, int dio);
     void setSPIFrequency(uint32_t frequency);
