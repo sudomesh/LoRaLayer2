@@ -15,7 +15,7 @@ void setup()
 
   Layer1.setPins(LORA_CS, LORA_RST, LORA_IRQ);
   Layer1.setLoRaFrequency(LORA_FREQ);
-  LL2.setLocalAddress("d1415fa1"); // this should either be randomized or set using the wifi mac address
+  LL2.setLocalAddress("c0d3f00d"); // this should either be randomized or set using the wifi mac address
   if (Layer1.init())
   {
     Serial.println(" --> LoRa initialized");
