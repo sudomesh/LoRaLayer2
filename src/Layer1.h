@@ -12,13 +12,7 @@
 
 #ifdef LORA
 #include <Arduino.h>
-
-// for solar-powered module use these settings:
-/*
-#define L1_DEFAULT_CS_PIN        2
-#define L1_DEFAULT_RESET_PIN     5
-#define L1_DEFAULT_DIO0_PIN      16
-*/
+#include <SPI.h>
 
 #define L1_DEFAULT_CS_PIN        18
 #define L1_DEFAULT_RESET_PIN     23

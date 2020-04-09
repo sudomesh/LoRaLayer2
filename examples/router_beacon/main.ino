@@ -1,6 +1,3 @@
-#include <Arduino.h>
-
-#include <SPI.h>
 #include <Layer1.h>
 #include <LoRaLayer2.h>
 
@@ -21,7 +18,7 @@ void setup()
   LL2.setLocalAddress("d1415fa1"); // this should either be randomized or set using the wifi mac address
   if (Layer1.init())
   {
-    Serial.printf(" --> LoRa initialized");
+    Serial.println(" --> LoRa initialized");
     LL2.init();             // initialize Layer2
     LL2.setInterval(10000); // set to zero to disable routing packets
   }
