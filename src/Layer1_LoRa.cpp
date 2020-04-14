@@ -3,23 +3,16 @@
 #include <LoRaLayer2.h>
 #ifdef LORA 
 
-
-Layer1Class::Layer1Class() :
-
-    _hashTable(),
-    _hashEntry(0),
-    _loraInitialized(0),
-
-    _csPin(L1_DEFAULT_CS_PIN),
-    _resetPin(L1_DEFAULT_RESET_PIN),
-    _DIOPin(L1_DEFAULT_DIO0_PIN),
-    _spiFrequency(100E3),
-    _loraFrequency(915E6),
-    _spreadingFactor(9),
-    _txPower(17)
-
+Layer1Class::Layer1Class()
 {
-
+    _loraInitialized = 0;
+    _csPin = L1_DEFAULT_CS_PIN;
+    _resetPin = L1_DEFAULT_RESET_PIN;
+    _DIOPin = L1_DEFAULT_DIO0_PIN;
+    _spiFrequency = 100E3;
+    _loraFrequency = 915E6;
+    _spreadingFactor = 9;
+    _txPower = 17;
 }
 
 int Layer1Class::debug_printf(const char* format, ...) {
@@ -37,41 +30,10 @@ int Layer1Class::debug_printf(const char* format, ...) {
     }
 }
 
+/* Public access to local variables
+*/
 int Layer1Class::getTime(){
     return millis();
-}
-
-int Layer1Class::isHashNew(char incoming[SHA1_LENGTH]){
-    int hashNew = 1;
-    for( int i = 0 ; i <= _hashEntry ; i++){
-        if(strcmp(incoming, (char*) _hashTable[i]) == 0){
-            hashNew = 0; 
-        }
-    }
-    if( hashNew ){
-        Serial.printf("New message received");
-        Serial.printf("\r\n");
-        for( int i = 0 ; i < SHA1_LENGTH ; i++){
-            _hashTable[_hashEntry][i] = incoming[i];
-        }
-        _hashEntry++;
-    }
-    return hashNew;
-}
-
-void Layer1Class::onReceive(int packetSize) {
-
-    if (packetSize == 0) return;          // if there's no packet, return
-    char incoming[PACKET_LENGTH];                 // payload of packet
-    int incomingLength = 0;
-    //Serial.printf("Receiving: ");
-    while (LoRa.available()) { 
-        incoming[incomingLength] = (char)LoRa.read(); 
-        //Serial.printf("%02x", incoming[incomingLength]);
-        incomingLength++;
-    }
-    //Serial.printf("\r\n");
-    LL2.packetReceived(incoming, incomingLength);
 }
 
 int Layer1Class::loraInitialized(){
@@ -90,6 +52,8 @@ int Layer1Class::DIOPin(){
     return _DIOPin;
 }
 
+/* User configurable settings
+*/
 void Layer1Class::setPins(int cs, int reset, int dio){
     _csPin = cs;
     _resetPin = reset;
@@ -112,17 +76,33 @@ void Layer1Class::setTxPower(int txPower){
     _txPower = txPower;
 }
 
-int Layer1Class::init(){ // maybe this should take the pins and spreading factor as inputs?
+/* Receive packet callback
+*/
+void Layer1Class::onReceive(int packetSize) {
+    if (packetSize == 0) return; // if there's no packet, return
+    char incoming[PACKET_LENGTH];
+    int length = 0;
+    while (LoRa.available()) {
+        incoming[length] = (char)LoRa.read();
+        length++;
+    }
+    uint8_t* data = ( uint8_t* ) incoming;
+    LL2.writePacket(data, length);
+    return;
+}
 
+/* Initialization
+*/
+int Layer1Class::init(){
     LoRa.setPins(_csPin, _resetPin, _DIOPin); // set CS, reset, DIO pin
     LoRa.setSPIFrequency(_spiFrequency);
     LoRa.setTxPower(_txPower);
 
-    if (!LoRa.begin(_loraFrequency)) {             // initialize ratio at 915 MHz
+    if (!LoRa.begin(_loraFrequency)) { // defaults to 915MHz, can also be 433MHz or 868Mhz
         return _loraInitialized;
     }
 
-    LoRa.setSpreadingFactor(_spreadingFactor);           // ranges from 6-12,default 7 see API docs
+    LoRa.setSpreadingFactor(_spreadingFactor); // ranges from 6-12, default 9
     LoRa.onReceive(onReceive);
     LoRa.receive();
 
@@ -130,18 +110,29 @@ int Layer1Class::init(){ // maybe this should take the pins and spreading factor
     return _loraInitialized;
 }
 
-void Layer1Class::send_packet(char* data, int len){
-
-    //Serial.printf("Sending: ");
-    if(LoRa.beginPacket()){
+/* Send/transmit data
+*/
+int Layer1Class::sendPacket(char* data, int len){
+    int ret = 0;
+    if((ret = LoRa.beginPacket())){
         for( int i = 0 ; i < len ; i++){
             LoRa.write(data[i]);
-            //Serial.printf("%02x", data[i]);
         }
-        //Serial.printf("\r\n");
         LoRa.endPacket(1);
         LoRa.receive();
     }
+    return ret;
+}
+
+int Layer1Class::transmit(){
+    int ret = -1;
+    Packet packet = LL2.readPacket();
+    if(packet.totalLength != 0){
+        if(sendPacket((char*)&packet, packet.totalLength)){
+          ret = packet.sequence;
+        }
+    }
+    return ret;
 }
 
 Layer1Class Layer1;

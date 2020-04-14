@@ -1,3 +1,5 @@
+#ifndef LAYER1_H
+#define LAYER1_H
 
 #include <unistd.h>
 #include <stdint.h>
@@ -21,29 +23,33 @@
 class Layer1Class {
 public:
     Layer1Class();
+
     int debug_printf(const char* format, ...);
-    uint8_t* charToHex(char* charString);
+
+    // Public access to local variables
     int getTime();
     int loraInitialized();
     int loraCSPin();
     int resetPin();
     int DIOPin();
-    int init();
-    void send_packet(char* data, int len);
 
+    // User configurable settings
     void setPins(int cs, int reset, int dio);
     void setSPIFrequency(uint32_t frequency);
     void setLoRaFrequency(uint32_t frequency);
     void setSpreadingFactor(uint8_t spreadingFactor);
     void setTxPower(int txPower);
 
-private:
-    int isHashNew(char incoming[SHA1_LENGTH]);
-    static void onReceive(int packetSize);
+    // Main public functions
+    int init();
+    int transmit();
 
 private:
-    uint8_t _hashTable[256][SHA1_LENGTH];
-    int _hashEntry;
+    // Main private functions
+    static void onReceive(int packetSize);
+    int sendPacket(char* data, int len);
+
+    // Local variables
     int _loraInitialized;
     int _csPin;
     int _resetPin;
@@ -101,4 +107,5 @@ private:
 };
 
 extern Layer1Class Layer1;
+#endif
 #endif
