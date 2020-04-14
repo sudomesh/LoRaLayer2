@@ -158,7 +158,6 @@ void LL2Class::getNeighborTable(char *out){
         buf += sprintf(buf, " %3d ", _neighborTable[i].metric);
         buf += sprintf(buf, "\r\n");
     }
-    buf += sprintf(buf, "\0");
 }
 
 void LL2Class::getRoutingTable(char *out){
@@ -176,7 +175,6 @@ void LL2Class::getRoutingTable(char *out){
         buf += sprintf(buf, " metric %3d ", _routeTable[i].metric);
         buf += sprintf(buf, "\r\n");
     }
-    buf += sprintf(buf, "\0");
 }
 
 void LL2Class::printPacketInfo(Packet packet){
