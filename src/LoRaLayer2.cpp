@@ -122,10 +122,10 @@ long LL2Class::setInterval(long interval){
 /* Layer 1 wrappers for packetBuffers
 */
 void LL2Class::writePacket(uint8_t* data, size_t length){
-    data[length] = '\0';
     if(length <= 0){
         return;
     }
+    data[length] = '\0';
     Packet packet;
     memcpy(&packet, data, length);
     L1toL2.write(packet);
