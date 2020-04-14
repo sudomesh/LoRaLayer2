@@ -103,6 +103,14 @@ To initialize your Layer 1 interface,
 ```
 Layer1.init();
 ```
+
+#### Transmit
+Check outgoing packet buffer and transmit if packet is available,
+```
+int ret = Layer1.transmit();
+```
+ * returns the sequence number of the packet transmitted, if no packet is transmitted, returns `-1`
+
 #### Other Layer 1 features
 Get the current time on your Layer 1 device as this may change from device to device (to simulator), 
 ```
@@ -112,7 +120,7 @@ int time = Layer1.getTime()
 
 Send a packet using Layer 1 interface. This will bypass LoRaLayer2 buffers and immeadiately transmit the packet. It should only be used if you know what you are doing,
 ```
-Layer1.send_packet(char* data, int len)
+Layer1.sendPacket(char* data, int len)
 ```
 
 ## LoRaLayer2 (LL2)
@@ -154,16 +162,17 @@ LL2.daemon()
 
 Send a datagram to LL2. The datagram will be inspected for a destination, will be given a header with the apporiate next hop and then will be added to outgoing packet buffer and eventually transmitted over the Layer1 interface.
 ```
-LL2.sendToLayer2(uint8_t *data, size_t len)
+int ret = LL2.writeData(uint8_t* data, size_t length)
 ```
  * `data` - byte array formatted as a datagram, as outlined on [our wiki](https://github.com/sudomesh/disaster-radio/wiki/Layered-Model#layer-3)
  * `len` - length of the entire datagram, typically header length + message length
+ * returns `int` representing the packet's place in buffer
 
 #### Receiving datagrams
 
 To receive the latest datagram, you must pop the latest packet meant for Layer3 from its LL2 buffer and then extract the datagram
 ```
-struct Packet packet = LL2.popFromL3OutBuffer()
+struct Packet packet = LL2.readData()
 ```
  * returns entire LL2 packet, if there is one available
  * returns 0, if there are no packets in the buffer
