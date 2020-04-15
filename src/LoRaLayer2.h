@@ -134,6 +134,8 @@ private:
     long _lastRoutingTime;
     int _routingInterval;
     int _disableRoutingPackets;
+    long _lastTransmitTime;
+    int _dutyInterval;
 };
 
 extern LL2Class LL2;

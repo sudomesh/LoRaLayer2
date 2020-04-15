@@ -44,6 +44,7 @@ LL2Class::LL2Class()
     _routeEntry = 0;
     _routingInterval = 15000;
     _disableRoutingPackets = 0;
+    _dutyInterval = 10000;
 }
 
 /* Public access to local variables
@@ -203,6 +204,15 @@ void LL2Class::printPacketInfo(Packet packet){
 
 /* Routing utility functions
 */
+
+double calculateAirtime(double length, double spreadingFactor, double explicitHeader, double lowDR, double codingRate, double bandwidth){
+    double timePerSymbol = pow(2, spreadingFactor)/(bandwidth);
+    double arg = ceil(((8*length)-(4*spreadingFactor)+28+16-(20*(1-explicitHeader)))/(4*(spreadingFactor-2*lowDR)))*(codingRate);
+    double symbolsPerPayload=8+(max(arg, 0.0));
+    double timePerPayload = timePerSymbol*symbolsPerPayload;
+    return timePerPayload;
+}
+
 uint8_t LL2Class::calculatePacketLoss(int entry, uint8_t sequence){
     uint8_t packet_loss = 0xFF;
     uint8_t sequence_diff = sequence - _neighborTable[entry].lastReceived;
@@ -380,24 +390,24 @@ int LL2Class::route(uint8_t ttl, uint8_t* data, size_t length, int broadcast){
     memcpy(destination, data, ADDR_LENGTH);
     if(ttl <= 0){
         // time to live expired
-        return 1;
+        return 0;
     }
     if(memcmp(destination, _loopbackAddr, ADDR_LENGTH) == 0){
         //Loopback
         // this should push back into the L3 buffer
-        return 1;
+        return 0;
     }else if(memcmp(destination, _broadcastAddr, ADDR_LENGTH) == 0){
         //Broadcast packet, only forward if explicity told to
         if(broadcast == 1){
             memcpy(nextHop, _broadcastAddr, ADDR_LENGTH);
         }else{
-            return 1;
+            return 0;
         }
     }else{
         int entry = selectRoute(destination);
         if(entry == -1){
             // No route found
-            return 1;
+            return 0;
         }else{
             // Route found
             memcpy(nextHop, _routeTable[entry].nextHop, ADDR_LENGTH);
@@ -477,6 +487,7 @@ void LL2Class::receive(){
 int LL2Class::init(){
     _startTime = Layer1.getTime();
     _lastRoutingTime = _startTime;
+    _lastTransmitTime = _startTime;
     setAddress(_loopbackAddr, "00000000");
     setAddress(_broadcastAddr, "ffffffff");
     setAddress(_routingAddr, "afffffff");
@@ -486,18 +497,25 @@ int LL2Class::init(){
 /* Main loop function
 */
 int LL2Class::daemon(){
+    int ret = -1;
     // try adding a routing packet to L2toL1 buffer, if interval is up and routing is enabled
     if (Layer1.getTime() - _lastRoutingTime > _routingInterval && _disableRoutingPackets == 0) {
         Packet routingPacket = buildRoutingPacket();
+        //Serial.printf("Packet length: %d\r\n", routingPacket.totalLength);
+        double airtime = calculateAirtime(routingPacket.totalLength, (double)Layer1.spreadingFactor(), 1, 0, 5, 125);
+        //Serial.printf("Airtime: %3.2f\r\n", airtime);
         L2toL1.write(routingPacket);
         _lastRoutingTime = Layer1.getTime();
     }
 
     // try transmitting a packet
-    int ret = Layer1.transmit();
-    if(ret >= 0){
-      // if a packet is transmitted, increment the global message count
-      _messageCount = (_messageCount + 1) % 256;
+    if (Layer1.getTime() - _lastTransmitTime > _dutyInterval){
+        ret = Layer1.transmit();
+        if(ret >= 0){
+          // if a packet is transmitted, increment the global message count
+          _messageCount = (_messageCount + 1) % 256;
+        }
+        _lastTransmitTime = Layer1.getTime();
     }
 
     // see if there are any packets to be received (i.e. in L1toL2 buffer)

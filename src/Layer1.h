@@ -32,6 +32,7 @@ public:
     int loraCSPin();
     int resetPin();
     int DIOPin();
+    int spreadingFactor();
 
     // User configurable settings
     void setPins(int cs, int reset, int dio);

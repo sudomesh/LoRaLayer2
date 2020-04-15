@@ -52,6 +52,10 @@ int Layer1Class::DIOPin(){
     return _DIOPin;
 }
 
+int Layer1Class::spreadingFactor(){
+    return _spreadingFactor;
+}
+
 /* User configurable settings
 */
 void Layer1Class::setPins(int cs, int reset, int dio){
