@@ -44,7 +44,8 @@ LL2Class::LL2Class()
     _routeEntry = 0;
     _routingInterval = 15000;
     _disableRoutingPackets = 0;
-    _dutyInterval = 10000;
+    _dutyInterval = 0;
+    _dutyCycle = .1;
 }
 
 /* Public access to local variables
@@ -118,6 +119,10 @@ long LL2Class::setInterval(long interval){
         _routingInterval = interval;
     }
     return _routingInterval;
+}
+
+void LL2Class::setDutyCycle(double dutyCycle){
+    _dutyCycle = dutyCycle;
 }
 
 /* Layer 1 wrappers for packetBuffers
@@ -501,21 +506,19 @@ int LL2Class::daemon(){
     // try adding a routing packet to L2toL1 buffer, if interval is up and routing is enabled
     if (Layer1.getTime() - _lastRoutingTime > _routingInterval && _disableRoutingPackets == 0) {
         Packet routingPacket = buildRoutingPacket();
-        //Serial.printf("Packet length: %d\r\n", routingPacket.totalLength);
-        double airtime = calculateAirtime(routingPacket.totalLength, (double)Layer1.spreadingFactor(), 1, 0, 5, 125);
-        //Serial.printf("Airtime: %3.2f\r\n", airtime);
         L2toL1.write(routingPacket);
         _lastRoutingTime = Layer1.getTime();
     }
 
     // try transmitting a packet
     if (Layer1.getTime() - _lastTransmitTime > _dutyInterval){
-        ret = Layer1.transmit();
-        if(ret >= 0){
-          // if a packet is transmitted, increment the global message count
+        int length = Layer1.transmit();
+        if(length > 0){
+          _lastTransmitTime = Layer1.getTime();
+          double airtime = calculateAirtime((double)length, (double)Layer1.spreadingFactor(), 1, 0, 5, 125);
+          _dutyInterval = (int)ceil(airtime/_dutyCycle);
           _messageCount = (_messageCount + 1) % 256;
         }
-        _lastTransmitTime = Layer1.getTime();
     }
 
     // see if there are any packets to be received (i.e. in L1toL2 buffer)

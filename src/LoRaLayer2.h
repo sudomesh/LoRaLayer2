@@ -69,6 +69,7 @@ public:
     // User configurable settings
     int setLocalAddress(const char* macString);
     long setInterval(long interval);
+    void setDutyCycle(double dutyCycle);
 
     // Wrappers for packetBuffers
     void writePacket(uint8_t* data, size_t length);
@@ -136,6 +137,7 @@ private:
     int _disableRoutingPackets;
     long _lastTransmitTime;
     int _dutyInterval;
+    double _dutyCycle;
 };
 
 extern LL2Class LL2;

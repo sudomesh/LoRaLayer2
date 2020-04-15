@@ -129,14 +129,11 @@ int Layer1Class::sendPacket(char* data, int len){
 }
 
 int Layer1Class::transmit(){
-    int ret = -1;
     Packet packet = LL2.readPacket();
     if(packet.totalLength != 0){
-        if(sendPacket((char*)&packet, packet.totalLength)){
-          ret = packet.sequence;
-        }
+        sendPacket((char*)&packet, packet.totalLength);
     }
-    return ret;
+    return packet.totalLength;
 }
 
 Layer1Class Layer1;
