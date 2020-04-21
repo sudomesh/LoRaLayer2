@@ -5,9 +5,10 @@
 #include <stdint.h>
 
 //#define DEBUG 0
-#define HEADER_LENGTH 11
+#define HEADER_LENGTH 17
 #define PACKET_LENGTH 256
 #define DATA_LENGTH 241
+#define MESSAGE_LENGTH 233
 #define SHA1_LENGTH 40
 #define ADDR_LENGTH 4
 #define MAX_ROUTES_PER_PACKET 40 
@@ -15,19 +16,22 @@
 #define DEFAULT_TTL 30
 #define BUFFERSIZE 16
 
-struct Metadata {
-    uint8_t rssi;
-    uint8_t snr;
-    uint8_t randomness;
+struct Datagram {
+    uint8_t destination[ADDR_LENGTH];
+    uint8_t type;
+    uint8_t message[MESSAGE_LENGTH];
 };
 
 struct Packet {
     uint8_t ttl;
     uint8_t totalLength;
+    uint8_t sender[ADDR_LENGTH];
+    uint8_t receiver[ADDR_LENGTH];
+    uint8_t sequence; // message count of packets tx by sender
     uint8_t source[ADDR_LENGTH];
-    uint8_t nextHop[ADDR_LENGTH];
-    uint8_t sequence;
-    uint8_t data[DATA_LENGTH];
+    uint8_t hopCount; // start 0, incremented with each retransmit
+    uint8_t metric; // of source-receiver link
+    Datagram datagram;
 };
 
 struct NeighborTableEntry{
@@ -74,7 +78,7 @@ public:
     // Wrappers for packetBuffers
     void writePacket(uint8_t* data, size_t length);
     Packet readPacket();
-    int writeData(uint8_t* data, size_t length);
+    int writeData(Datagram datagram, size_t length);
     Packet readData();
 
     // Print out functions
@@ -83,8 +87,8 @@ public:
     void printPacketInfo(Packet packet);
 
     // Packet building functions
-    Packet buildPacket(uint8_t ttl, uint8_t next[ADDR_LENGTH], uint8_t data[DATA_LENGTH], uint8_t dataLength);
-    Packet buildRoutingPacket();
+    Packet buildPacket(uint8_t ttl, uint8_t nextHop[ADDR_LENGTH], uint8_t source[ADDR_LENGTH], uint8_t hopCount, uint8_t metric, Datagram datagram, size_t length);
+    //Packet buildRoutingPacket();
 
     // Main init and loop functions
     int init();
@@ -100,17 +104,17 @@ private:
 
     // Routing utility functions
     uint8_t calculatePacketLoss(int entry, uint8_t sequence);
-    uint8_t calculateMetric(int entry, uint8_t sequence, Metadata metadata);
+    uint8_t calculateMetric(int entry);
     int checkNeighborTable(NeighborTableEntry neighbor);
     int checkRoutingTable(RoutingTableEntry route);
     int updateNeighborTable(NeighborTableEntry neighbor, int entry);
     int updateRouteTable(RoutingTableEntry route, int entry);
     int selectRoute(uint8_t destination[ADDR_LENGTH]);
-    int parseForNeighbor(Packet packet, Metadata metadata);
+    int parseForNeighbor(Packet packet);
 
     // Main entry point functions
-    int parseForRoutes(Packet packet, Metadata metadata);
-    int route(uint8_t ttl, uint8_t* data, size_t length, int broadcast);
+    void parseHeader(Packet packet);
+    int route(uint8_t ttl, uint8_t source[ADDR_LENGTH], uint8_t hopCount, Datagram datagram, size_t length, int broadcast);
     void receive();
 
     // Fifo buffer objects
@@ -126,7 +130,6 @@ private:
     uint8_t _routingAddr[ADDR_LENGTH];
     uint8_t _messageCount;
     float _packetSuccessWeight;
-    float _randomMetricWeight;
     NeighborTableEntry _neighborTable[255];
     int _neighborEntry;
     RoutingTableEntry _routeTable[255];
