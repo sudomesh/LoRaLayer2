@@ -363,18 +363,37 @@ int LL2Class::parseForNeighbor(Packet packet){
 void LL2Class::parseHeader(Packet packet){
     // Parse packet header to update neighbor (i.e. sender address)
     int n_entry = parseForNeighbor(packet);
-    // Parse datagram header to update source route
-    RoutingTableEntry route;
-    memcpy(route.destination, packet.source, ADDR_LENGTH);
-    memcpy(route.nextHop, packet.sender, ADDR_LENGTH);
-    route.distance = packet.hopCount+1;
-    // average neighbor metric with rest of route metric
-    float hopRatio = 1/((float)route.distance);
-    float metric = ((float) _neighborTable[n_entry].metric)*(hopRatio) + ((float)packet.metric)*(1-hopRatio);
-    route.metric = (uint8_t) metric;
-    int r_entry = checkRoutingTable(route);
-    if(r_entry >= 0){
-        updateRouteTable(route, r_entry);
+
+    if(memcmp(packet.receiver, _localAddress, ADDR_LENGTH) != 0 && 
+      memcmp(packet.receiver, _broadcastAddr, ADDR_LENGTH) != 0){
+      // packet was meant for someone else, but still parse for reciever route
+      RoutingTableEntry rcv_route;
+      memcpy(rcv_route.destination, packet.receiver, ADDR_LENGTH);
+      memcpy(rcv_route.nextHop, packet.sender, ADDR_LENGTH);
+      // assumes the node is still alive and has not moved since the sender discovered this neighbor
+      rcv_route.distance = 2;
+      // metric unknown until you hear a routed packet from node?
+      rcv_route.metric = 0;
+      int r_entry = checkRoutingTable(rcv_route);
+      if(r_entry >= 0){
+        updateRouteTable(rcv_route, r_entry);
+      }
+    }
+
+    if(memcmp(packet.sender, packet.source, ADDR_LENGTH) != 0){
+      // source is different from sender, parse for source route
+      RoutingTableEntry src_route;
+      memcpy(src_route.destination, packet.source, ADDR_LENGTH);
+      memcpy(src_route.nextHop, packet.sender, ADDR_LENGTH);
+      src_route.distance = packet.hopCount+1;
+      // average neighbor metric with rest of route metric
+      float hopRatio = 1/((float)src_route.distance);
+      float metric = ((float) _neighborTable[n_entry].metric)*(hopRatio) + ((float)packet.metric)*(1-hopRatio);
+      src_route.metric = (uint8_t) metric;
+      int r_entry = checkRoutingTable(src_route);
+      if(r_entry >= 0){
+          updateRouteTable(src_route, r_entry);
+      }
     }
     return;
 }
