@@ -1,21 +1,6 @@
 #include <Layer1.h>
 #include <LoRaLayer2.h>
 #ifdef SIM
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <stdarg.h>
-#include <string.h>
-#include <time.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-//#include <openssl/sha.h>
 
 struct timeval to_sleep;
 serial Serial;
@@ -41,17 +26,11 @@ int timeval_subtract(struct timeval *result, struct timeval *x, struct timeval *
     return x->tv_sec < y->tv_sec;
 }
 
-Layer1Class::Layer1Class() :
-
-    _localAddress(),
-    _transmitting(0),
-    _nodeID(),
-    _hashTable(),
-    _hashEntry(0),
-    _timeDistortion(1)
-    //_loraInitialized(0),
-
+Layer1Class::Layer1Class()
 {
+    _transmitting = 0;
+    _timeDistortion = 1;
+    _spreadingFactor = 9;
 
 }
 
@@ -81,27 +60,8 @@ int Layer1Class::getTime(){
     return time(NULL);
 }
 
-int Layer1Class::isHashNew(uint8_t hash[SHA1_LENGTH]){
-    int hashNew = 1;
-    Serial.printf("hash is %x\n", hash);
-    for( int i = 0 ; i <= _hashEntry ; i++){
-        /*
-        if(strcmp(hash, hashTable[i]) == 0){
-            hashNew = 0; 
-            Serial.printf("Not new!\n");
-        }
-        */
-    }
-    if(hashNew){
-        // add to hash table
-        Serial.printf("New message received");
-        Serial.printf("\r\n");
-        for( int i = 0 ; i < SHA1_LENGTH ; i++){
-            _hashTable[_hashEntry][i] = hash[i];
-        }
-        _hashEntry++;
-    }
-    return hashNew;
+int Layer1Class::spreadingFactor(){
+    return _spreadingFactor;
 }
 
 int Layer1Class::debug_printf(const char* format, ...) {
@@ -116,39 +76,6 @@ int Layer1Class::debug_printf(const char* format, ...) {
   }else{
     return 0;
   }
-}
-
-uint8_t Layer1Class::hex_digit(char ch){
-  if(( '0' <= ch ) && ( ch <= '9' )){
-    ch -= '0';
-  }else{
-    if(( 'a' <= ch ) && ( ch <= 'f' )){
-      ch += 10 - 'a';
-    }else{
-      if(( 'A' <= ch ) && ( ch <= 'F' ) ){
-        ch += 10 - 'A';
-      }else{
-        ch = 16;
-      }
-    }
-  }
-  return ch;
-}
-
-int Layer1Class::setLocalAddress(char* macString){
-  for( int i = 0; i < sizeof(_localAddress)/sizeof(_localAddress[0]); ++i ){
-    _localAddress[i]  = hex_digit( macString[2*i] ) << 4;
-    _localAddress[i] |= hex_digit( macString[2*i+1] );
-  }
-  if(_localAddress){
-    return 1;
-  }else{
-    return 0;
-  }
-}
-
-uint8_t* Layer1Class::localAddress(){
-    return _localAddress;
 }
 
 int Layer1Class::setNodeID(char* newID){
@@ -185,7 +112,7 @@ int Layer1Class::parse_metadata(char* data, uint8_t len){
     return 0;
 }
 
-int Layer1Class::send_packet(char* data, uint8_t len) {
+int Layer1Class::sendPacket(char* data, uint8_t len) {
     char packet[258];
     ssize_t written = 0;
     ssize_t ret;
@@ -210,6 +137,14 @@ int Layer1Class::send_packet(char* data, uint8_t len) {
     return 0;
 }
 
+int Layer1Class::transmit(){
+    Packet packet = LL2.readPacket();
+    if(packet.totalLength > 0){
+        sendPacket((char*)&packet, packet.totalLength);
+    }
+    return packet.totalLength;
+}
+
 Layer1Class Layer1;
 
 int print_err(const char* format, ...) {
@@ -230,7 +165,7 @@ int main(int argc, char **argv) {
                 Layer1.setTimeDistortion(strtod(optarg, NULL));
                 break;
             case 'a':
-                Layer1.setLocalAddress(optarg);
+                LL2.setLocalAddress(optarg);
                 break;
             case 'n':
                 Layer1.setNodeID(optarg);
@@ -321,8 +256,9 @@ int main(int argc, char **argv) {
                     return ret;
                 }
             }
-            else if(ret = LL2.packetReceived(buffer, len)){
-                return ret;
+            else{
+                LL2.writePacket((uint8_t*)buffer, len);
+                return 0;
             }
             meta = 0;
             len = 0;

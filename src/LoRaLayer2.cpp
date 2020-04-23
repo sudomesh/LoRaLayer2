@@ -216,7 +216,7 @@ void LL2Class::printPacketInfo(Packet packet){
 double calculateAirtime(double length, double spreadingFactor, double explicitHeader, double lowDR, double codingRate, double bandwidth){
     double timePerSymbol = pow(2, spreadingFactor)/(bandwidth);
     double arg = ceil(((8*length)-(4*spreadingFactor)+28+16-(20*(1-explicitHeader)))/(4*(spreadingFactor-2*lowDR)))*(codingRate);
-    double symbolsPerPayload=8+(max(arg, 0.0));
+    double symbolsPerPayload=8+(fmax(arg, 0.0));
     double timePerPayload = timePerSymbol*symbolsPerPayload;
     return timePerPayload;
 }
