@@ -128,10 +128,10 @@ void LL2Class::setDutyCycle(double dutyCycle){
 /* Layer 1 wrappers for packetBuffers
 */
 void LL2Class::writePacket(uint8_t* data, size_t length){
-    data[length] = '\0';
     if(length <= 0){
         return;
     }
+    data[length] = '\0';
     Packet packet;
     memcpy(&packet, data, length);
     L1toL2.write(packet);
@@ -164,7 +164,6 @@ void LL2Class::getNeighborTable(char *out){
         buf += sprintf(buf, " %3d ", _neighborTable[i].metric);
         buf += sprintf(buf, "\r\n");
     }
-    buf += sprintf(buf, "\0");
 }
 
 void LL2Class::getRoutingTable(char *out){
@@ -182,7 +181,6 @@ void LL2Class::getRoutingTable(char *out){
         buf += sprintf(buf, " metric %3d ", _routeTable[i].metric);
         buf += sprintf(buf, "\r\n");
     }
-    buf += sprintf(buf, "\0");
 }
 
 void LL2Class::printPacketInfo(Packet packet){
@@ -295,7 +293,6 @@ int LL2Class::checkRoutingTable(RoutingTableEntry route){
 
 int LL2Class::updateNeighborTable(NeighborTableEntry neighbor, int entry){
     // copy neighbor into specified entry in neighbor table
-    memset(&_neighborTable[entry], 0, sizeof(_neighborTable[entry]));
     memcpy(&_neighborTable[entry], &neighbor, sizeof(_neighborTable[entry]));
     if(entry == _neighborEntry){
         // if specified entry is the same as current count of neighbors
@@ -308,7 +305,6 @@ int LL2Class::updateNeighborTable(NeighborTableEntry neighbor, int entry){
 
 int LL2Class::updateRouteTable(RoutingTableEntry route, int entry){
     // copy route into specified entry in routing table
-    memset(&_routeTable[entry], 0, sizeof(_routeTable[entry]));
     memcpy(&_routeTable[entry], &route, sizeof(_routeTable[entry]));
     if(entry == _routeEntry){
         // if specified entry is the same as current count of routes
