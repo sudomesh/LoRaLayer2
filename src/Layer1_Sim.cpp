@@ -28,6 +28,7 @@ int timeval_subtract(struct timeval *result, struct timeval *x, struct timeval *
 
 Layer1Class::Layer1Class()
 {
+    _nodeID = 1;
     _transmitting = 0;
     _timeDistortion = 1;
     _spreadingFactor = 9;
@@ -78,9 +79,13 @@ int Layer1Class::debug_printf(const char* format, ...) {
   }
 }
 
-int Layer1Class::setNodeID(char* newID){
+int Layer1Class::setNodeID(int newID){
     _nodeID = newID;
     return 0;
+}
+
+int Layer1Class::nodeID(){
+    return _nodeID;
 }
 
 int Layer1Class::begin_packet(){
@@ -168,7 +173,7 @@ int main(int argc, char **argv) {
                 LL2.setLocalAddress(optarg);
                 break;
             case 'n':
-                Layer1.setNodeID(optarg);
+                Layer1.setNodeID(atoi(optarg));
                 break;
             default:
                 perror("Bad args\n");

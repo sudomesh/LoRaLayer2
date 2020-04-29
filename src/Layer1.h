@@ -94,7 +94,9 @@ public:
     int getTime();
     int spreadingFactor();
     int debug_printf(const char* format, ...);
-    int setNodeID(char* newID);
+    int setNodeID(int newID);
+    int nodeID();
+
     int parse_metadata(char* data, uint8_t len);
     int begin_packet();
     int transmit();
@@ -104,7 +106,7 @@ private:
     float timeDistortion();
 
     int _transmitting;
-    char* _nodeID;
+    int _nodeID;
     float _timeDistortion;
     uint8_t _spreadingFactor;
 
