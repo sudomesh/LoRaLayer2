@@ -134,6 +134,13 @@ void LL2Class::writePacket(uint8_t* data, size_t length){
     Packet packet;
     memcpy(&packet, data, length);
     L1toL2.write(packet);
+    #ifdef DEBUG
+    Serial.printf("LoRaLayer2::writePacket(): packet.datagram.message = ");
+    for(int i = 0; i < length-HEADER_LENGTH-5; i++){
+      Serial.printf("%c", packet.datagram.message[i]);
+    }
+    Serial.printf("\r\n");
+    #endif
     return;
 }
 
@@ -144,6 +151,13 @@ Packet LL2Class::readPacket(){
 /* Layer 3 wrappers for packetBuffers
 */
 int LL2Class::writeData(Datagram datagram, size_t length){
+    #ifdef DEBUG
+    Serial.printf("LoRaLayer2::writeData(): datagram.message = ");
+    for(int i = 0; i < length-5; i++){
+      Serial.printf("%c", datagram.message[i]);
+    }
+    Serial.printf("\r\n");
+    #endif
     uint8_t hopCount = 0; // inital hopCount of zero
     int broadcast = 1; // allow broadcasts to be sent
     return route(DEFAULT_TTL, _localAddress, hopCount, datagram, length, broadcast);
@@ -470,6 +484,13 @@ int LL2Class::route(uint8_t ttl, uint8_t source[ADDR_LENGTH], uint8_t hopCount, 
 void LL2Class::receive(){
   Packet packet = L1toL2.read();
   if(packet.totalLength > 0){
+    #ifdef DEBUG
+    Serial.printf("LoRaLayer2::receive(): packet.datagram.message = ");
+    for(int i = 0; i < packet.totalLength-HEADER_LENGTH-5; i++){
+      Serial.printf("%c", packet.datagram.message[i]);
+    }
+    Serial.printf("\r\n");
+    #endif
     parseHeader(packet);
     if(memcmp(packet.datagram.destination, _localAddress, ADDR_LENGTH) == 0 || 
       memcmp(packet.receiver, _broadcastAddr, ADDR_LENGTH) == 0){

@@ -6,7 +6,7 @@
 
 #define STDIN 0
 #define STDOUT 1
-#define DEBUG 0
+//#define DEBUG
 #define SHA1_LENGTH 40
 
 #ifndef SIM  // define SIM to use Layer1_Sim.cpp
@@ -74,12 +74,15 @@ extern Layer1Class Layer1;
 #include <fcntl.h>
 #include <stdarg.h>
 #include <time.h>
+#include <sys/time.h>
 
 typedef struct _serial {
   int (*printf)(const char*, ...);
 } serial;
 
 extern serial Serial;
+extern serial debug;
+extern int nsleep(unsigned int secs, useconds_t usecs);
 
 // you must declare these in your router
 int setup(); // called once on startup
@@ -88,12 +91,11 @@ int loop(); // called once per event loop iteration
 class Layer1Class {
 public:
     Layer1Class();
-    int nsleep(unsigned int secs, useconds_t usecs);
     int simulationTime(int realTime);
     int setTimeDistortion(float newDistortion);
     int getTime();
+    void setTime(int millis);
     int spreadingFactor();
-    int debug_printf(const char* format, ...);
     int setNodeID(int newID);
     int nodeID();
 
@@ -109,6 +111,7 @@ private:
     int _nodeID;
     float _timeDistortion;
     uint8_t _spreadingFactor;
+    long _millis;
 
 };
 
