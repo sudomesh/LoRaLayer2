@@ -1,7 +1,6 @@
 #ifndef LAYER1_H
 #define LAYER1_H
 
-#include <unistd.h> // maybe uncessasry?
 #include <stdint.h>
 
 #define STDIN 0
@@ -70,23 +69,6 @@ extern Layer1Class Layer1;
 #include <stdio.h>
 #include <string.h> // for memcmp and memset functions
 #include <math.h>  // for ceil and pow functions
-#include <errno.h>
-#include <fcntl.h>
-#include <stdarg.h>
-#include <time.h>
-#include <sys/time.h>
-
-typedef struct _serial {
-  int (*printf)(const char*, ...);
-} serial;
-
-extern serial Serial;
-extern serial debug;
-extern int nsleep(unsigned int secs, useconds_t usecs);
-
-// you must declare these in your router
-int setup(); // called once on startup
-int loop(); // called once per event loop iteration
 
 class Layer1Class {
 public:

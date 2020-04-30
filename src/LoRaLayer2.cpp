@@ -202,6 +202,8 @@ void LL2Class::getRoutingTable(char *out){
 
 void LL2Class::printPacketInfo(Packet packet){
 
+    //TODO: LL2 shouldn't use Serial.printf
+    /*
     Serial.printf("ttl: %d\r\n", packet.ttl);
     Serial.printf("length: %d\r\n", packet.totalLength);
     Serial.printf("source: ");
@@ -215,13 +217,12 @@ void LL2Class::printPacketInfo(Packet packet){
     }
     Serial.printf("\r\n");
     Serial.printf("sequence: %02x\r\n", packet.sequence);
-    /*
     Serial.printf("data: ");
     for(int i = 0 ; i < packet.totalLength-HEADER_LENGTH ; i++){
         Serial.printf("%02x", packet.datagram[i]);
     }
-    */
     Serial.printf("\r\n");
+    */
 }
 
 /* Routing utility functions
