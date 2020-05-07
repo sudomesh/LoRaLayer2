@@ -99,6 +99,23 @@ void LL2Class::setAddress(uint8_t* addr, const char* macString){
   }
 }
 
+void LL2Class::console_printf(const char* format, ...){
+  char *str = (char*)malloc(255);
+  va_list args;
+  va_start(args, format);
+  size_t len = vsprintf(str, format, args);
+  va_end(args);
+
+  uint8_t ttl = 30;
+  uint8_t totalLength = len+5+HEADER_LENGTH;
+  Packet packet = {ttl, totalLength};
+  Datagram datagram = {0xff, 0xff, 0xff, 0xff, 'i'};
+  memcpy(datagram.message, str, len);
+  memcpy(&packet.datagram, &datagram, len+5);
+  L2toL3.write(packet);
+  free(str);
+}
+
 /* User configurable settings
 */
 int LL2Class::setLocalAddress(const char* macString){
@@ -376,12 +393,14 @@ int LL2Class::parseForNeighbor(Packet packet){
 /* Entry point to build routing table
 */
 void LL2Class::parseHeader(Packet packet){
-    // Parse packet header to update neighbor (i.e. sender address)
+    // Parse for sender address (i.e. your neighbor)
     int n_entry = parseForNeighbor(packet);
+    int r_entry = -1;
 
+    // Parse for receiver address route
     if(memcmp(packet.receiver, _localAddress, ADDR_LENGTH) != 0 && 
       memcmp(packet.receiver, _broadcastAddr, ADDR_LENGTH) != 0){
-      // packet was meant for someone else, but still parse for reciever route
+      // packet was meant for someone else, but still parse for receiver route
       RoutingTableEntry rcv_route;
       memcpy(rcv_route.destination, packet.receiver, ADDR_LENGTH);
       memcpy(rcv_route.nextHop, packet.sender, ADDR_LENGTH);
@@ -389,14 +408,15 @@ void LL2Class::parseHeader(Packet packet){
       rcv_route.distance = 2;
       // metric unknown until you hear a routed packet from node?
       rcv_route.metric = 0;
-      int r_entry = checkRoutingTable(rcv_route);
+      r_entry = checkRoutingTable(rcv_route);
       if(r_entry >= 0){
         updateRouteTable(rcv_route, r_entry);
       }
     }
 
+    // Parse for source address route
     if(memcmp(packet.sender, packet.source, ADDR_LENGTH) != 0){
-      // source is different from sender, parse for source route
+      // source is different from sender
       RoutingTableEntry src_route;
       memcpy(src_route.destination, packet.source, ADDR_LENGTH);
       memcpy(src_route.nextHop, packet.sender, ADDR_LENGTH);
@@ -405,9 +425,26 @@ void LL2Class::parseHeader(Packet packet){
       float hopRatio = 1/((float)src_route.distance);
       float metric = ((float) _neighborTable[n_entry].metric)*(hopRatio) + ((float)packet.metric)*(1-hopRatio);
       src_route.metric = (uint8_t) metric;
-      int r_entry = checkRoutingTable(src_route);
+      r_entry = checkRoutingTable(src_route);
       if(r_entry >= 0){
           updateRouteTable(src_route, r_entry);
+      }
+    }
+
+    // Parse for destination address route
+    if(memcmp(packet.datagram.destination, _localAddress, ADDR_LENGTH) != 0 && 
+      memcmp(packet.datagram.destination, packet.receiver, ADDR_LENGTH) != 0 &&
+      memcmp(packet.datagram.destination, _broadcastAddr, ADDR_LENGTH) != 0){
+      //datagram destination is not my address, the receiver address, or the broadcast address
+      RoutingTableEntry dst_route;
+      memcpy(dst_route.destination, packet.datagram.destination, ADDR_LENGTH);
+      memcpy(dst_route.nextHop, packet.sender, ADDR_LENGTH);
+      // distance and metric are unknown until you receive packet from this destination
+      dst_route.distance = 255; 
+      dst_route.metric = 0;
+      r_entry = checkRoutingTable(dst_route);
+      if(r_entry >= 0){
+          updateRouteTable(dst_route, r_entry);
       }
     }
     return;
@@ -454,24 +491,34 @@ Packet LL2Class::buildRoutingPacket(){
 */
 int LL2Class::route(uint8_t ttl, uint8_t source[ADDR_LENGTH], uint8_t hopCount, Datagram datagram, size_t length, int broadcast){
     int ret = -1;
+    uint8_t metric = 0;
     if(ttl > 0){
-      int src_entry = selectRoute(source);
+      if(memcmp(source, _localAddress, ADDR_LENGTH) != 0){
+        int src_entry = selectRoute(source);
+        if(src_entry >= 0){
+          metric = _routeTable[src_entry].metric;
+        }
+        // else ERROR source route has not been added yet
+        // leave metric empty?
+      }
+      
       if(memcmp(datagram.destination, _loopbackAddr, ADDR_LENGTH) == 0){
         //Loopback
         // this should push back into the L3 buffer
-      }else if(memcmp(datagram.destination, _broadcastAddr, ADDR_LENGTH) == 0){
+      }
+      else if(memcmp(datagram.destination, _broadcastAddr, ADDR_LENGTH) == 0){
         //Broadcast packet, only forward if explicity told to
         if(broadcast == 1){
-          Packet packet = buildPacket(ttl, _broadcastAddr, source, hopCount, _routeTable[src_entry].metric, datagram, length);
+          Packet packet = buildPacket(ttl, _broadcastAddr, source, hopCount, metric, datagram, length);
           ret = L2toL1.write(packet);
         }
-      }else{
-        // Look for route in routing table
+      }
+      else{
         int dst_entry = selectRoute(datagram.destination);
         if(dst_entry >= 0){
           // Route found
           // build packet with new ttl, nextHop, and route metric
-          Packet packet = buildPacket(ttl, _routeTable[dst_entry].nextHop, source, hopCount, _routeTable[src_entry].metric, datagram, length);
+          Packet packet = buildPacket(ttl, _routeTable[dst_entry].nextHop, source, hopCount, metric, datagram, length);
           // return packet's position in buffer
           ret = L2toL1.write(packet);
         }
@@ -503,7 +550,7 @@ void LL2Class::receive(){
       // strip header and route new packet
       packet.ttl--;
       packet.hopCount++;
-      route(packet.ttl, packet.source, packet.hopCount, packet.datagram, packet.totalLength, 0);
+      route(packet.ttl, packet.source, packet.hopCount, packet.datagram, packet.totalLength-HEADER_LENGTH, 0);
     }
   }
   //else buffer is empty, do nothing;

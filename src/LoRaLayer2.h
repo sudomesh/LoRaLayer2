@@ -3,6 +3,7 @@
 
 #include <unistd.h>
 #include <stdint.h>
+#include <stdarg.h>
 
 //#define DEBUG 0
 #define HEADER_LENGTH 17
@@ -101,6 +102,7 @@ private:
     // General purpose utility functions
     uint8_t hexDigit(char ch);
     void setAddress(uint8_t* addr, const char* macString);
+    void console_printf(const char* format, ...);
 
     // Routing utility functions
     uint8_t calculatePacketLoss(int entry, uint8_t sequence);
