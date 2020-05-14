@@ -87,10 +87,6 @@ public:
     void getRoutingTable(char *out);
     void printPacketInfo(Packet packet);
 
-    // Packet building functions
-    Packet buildPacket(uint8_t ttl, uint8_t nextHop[ADDR_LENGTH], uint8_t source[ADDR_LENGTH], uint8_t hopCount, uint8_t metric, Datagram datagram, size_t length);
-    //Packet buildRoutingPacket();
-
     // Main init and loop functions
     int init();
     int daemon();
@@ -105,6 +101,8 @@ private:
     void console_printf(const char* format, ...);
 
     // Routing utility functions
+    Packet buildPacket(uint8_t ttl, uint8_t nextHop[ADDR_LENGTH], uint8_t source[ADDR_LENGTH], uint8_t hopCount, uint8_t metric, Datagram datagram, size_t length);
+    Packet buildRoutingPacket();
     uint8_t calculatePacketLoss(int entry, uint8_t sequence);
     uint8_t calculateMetric(int entry);
     int checkNeighborTable(NeighborTableEntry neighbor);
@@ -112,10 +110,11 @@ private:
     int updateNeighborTable(NeighborTableEntry neighbor, int entry);
     int updateRouteTable(RoutingTableEntry route, int entry);
     int selectRoute(uint8_t destination[ADDR_LENGTH]);
-    int parseForNeighbor(Packet packet);
+    int parseNeighbor(Packet packet);
+    int parseRoutingTable(Packet packet, int n_entry);
 
     // Main entry point functions
-    void parseHeader(Packet packet);
+    void parseForRoutes(Packet packet);
     int route(uint8_t ttl, uint8_t source[ADDR_LENGTH], uint8_t hopCount, Datagram datagram, size_t length, int broadcast);
     void receive();
 

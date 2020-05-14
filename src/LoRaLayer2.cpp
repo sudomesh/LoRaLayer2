@@ -245,6 +245,45 @@ void LL2Class::printPacketInfo(Packet packet){
 /* Routing utility functions
 */
 
+Packet LL2Class::buildPacket(uint8_t ttl, uint8_t nextHop[ADDR_LENGTH], uint8_t source[ADDR_LENGTH], uint8_t hopCount, uint8_t metric,  Datagram datagram, size_t length){
+    uint8_t totalLength = HEADER_LENGTH + length;
+    Packet packet = {ttl, totalLength};
+    memcpy(packet.sender, _localAddress, ADDR_LENGTH);
+    memcpy(packet.receiver, nextHop, ADDR_LENGTH);
+    packet.sequence = messageCount();
+    memcpy(packet.source, source, ADDR_LENGTH);
+    packet.hopCount = hopCount;
+    packet.metric = metric;
+    memcpy(&packet.datagram, &datagram, length);
+    return packet;
+}
+
+Packet LL2Class::buildRoutingPacket(){
+    uint8_t data[DATA_LENGTH];
+    int dataLength = 0;
+    int routesPerPacket = _routeEntry;
+    if (_routeEntry >= MAX_ROUTES_PER_PACKET-1){
+        routesPerPacket = MAX_ROUTES_PER_PACKET-1;
+    }
+    for( int i = 0 ; i < routesPerPacket ; i++){
+        for( int j = 0 ; j < ADDR_LENGTH ; j++){
+            data[dataLength] = _routeTable[i].destination[j];
+            dataLength++;
+        }
+        data[dataLength] = _routeTable[i].distance;
+        dataLength++;
+        data[dataLength] = _routeTable[i].metric;
+        dataLength++;
+    }
+    uint8_t nextHop[ADDR_LENGTH] = { 0xaf, 0xff, 0xff, 0xff };
+    // copy raw data into datagram to create packet
+    Datagram datagram; //= { 0xaf, 0xff, 0xff, 0xff, 'r' };
+    memcpy(&datagram, &data, dataLength);
+
+    Packet packet = buildPacket(1, nextHop, localAddress(), 0, 0, datagram, dataLength);
+    return packet;
+}
+
 double calculateAirtime(double length, double spreadingFactor, double explicitHeader, double lowDR, double codingRate, double bandwidth){
     double timePerSymbol = pow(2, spreadingFactor)/(bandwidth);
     double arg = ceil(((8*length)-(4*spreadingFactor)+28+16-(20*(1-explicitHeader)))/(4*(spreadingFactor-2*lowDR)))*(codingRate);
@@ -364,7 +403,7 @@ int LL2Class::selectRoute(uint8_t destination[ADDR_LENGTH]){
     return entry;
 }
 
-int LL2Class::parseForNeighbor(Packet packet){
+int LL2Class::parseNeighbor(Packet packet){
     // Create neighbor table entry with sender address
     NeighborTableEntry neighbor;
     memcpy(neighbor.address, packet.sender, sizeof(neighbor.address));
@@ -390,12 +429,49 @@ int LL2Class::parseForNeighbor(Packet packet){
     return n_entry;
 }
 
+int LL2Class::parseRoutingTable(Packet packet, int n_entry){
+    int entry = -1;
+    int numberOfRoutes = (packet.totalLength - HEADER_LENGTH) / (ADDR_LENGTH+2);
+    uint8_t data[packet.totalLength - HEADER_LENGTH];
+    memcpy(data, &packet.datagram, sizeof(data));
+    //NeighborTableEntry neighbor;
+    //memcpy(neighbor.address, packet.sender, sizeof(neighbor.address));
+    //int n_entry = checkNeighborTable(neighbor);
+    for( int i = 0 ; i < numberOfRoutes ; i++){
+        RoutingTableEntry route;
+        memcpy(route.destination, data + (ADDR_LENGTH+2)*i, ADDR_LENGTH);
+        memcpy(route.nextHop, packet.source, ADDR_LENGTH);
+        route.distance = data[(ADDR_LENGTH+2)*i + ADDR_LENGTH];
+        route.distance++; // add a hop to distance
+        float metric = (float) data[(ADDR_LENGTH+2)*i + ADDR_LENGTH+1];
+
+        entry = checkRoutingTable(route);
+        if(entry > 0){
+            // average neighbor metric with rest of route metric
+            float hopRatio = 1/((float)route.distance);
+            metric = ((float) _neighborTable[n_entry].metric)*(hopRatio) + ((float)route.metric)*(1-hopRatio);
+            route.metric = (uint8_t) metric;
+            if(getRouteEntry() <= 40){
+                updateRouteTable(route, entry);
+            }
+        }
+    }
+    return numberOfRoutes;
+}
+
+
 /* Entry point to build routing table
 */
-void LL2Class::parseHeader(Packet packet){
+void LL2Class::parseForRoutes(Packet packet){
     // Parse for sender address (i.e. your neighbor)
-    int n_entry = parseForNeighbor(packet);
+    int n_entry = parseNeighbor(packet);
     int r_entry = -1;
+
+    if(memcmp(packet.receiver, _routingAddr, ADDR_LENGTH) == 0){
+      // packet contains routing table info, parse for routes in datagram only
+      parseRoutingTable(packet, n_entry);
+      return;
+    }
 
     // Parse for receiver address route
     if(memcmp(packet.receiver, _localAddress, ADDR_LENGTH) != 0 && 
@@ -450,43 +526,6 @@ void LL2Class::parseHeader(Packet packet){
     return;
 }
 
-Packet LL2Class::buildPacket(uint8_t ttl, uint8_t nextHop[ADDR_LENGTH], uint8_t source[ADDR_LENGTH], uint8_t hopCount, uint8_t metric,  Datagram datagram, size_t length){
-    uint8_t totalLength = HEADER_LENGTH + length;
-    Packet packet = {ttl, totalLength};
-    memcpy(packet.sender, _localAddress, ADDR_LENGTH);
-    memcpy(packet.receiver, nextHop, ADDR_LENGTH);
-    packet.sequence = messageCount();
-    memcpy(packet.source, source, ADDR_LENGTH);
-    packet.hopCount = hopCount;
-    packet.metric = metric;
-    memcpy(&packet.datagram, &datagram, length);
-    return packet;
-}
-
-/*
-Packet LL2Class::buildRoutingPacket(){
-    uint8_t data[DATA_LENGTH];
-    int dataLength = 0;
-    int routesPerPacket = _routeEntry;
-    if (_routeEntry >= MAX_ROUTES_PER_PACKET-1){
-        routesPerPacket = MAX_ROUTES_PER_PACKET-1;
-    }
-    for( int i = 0 ; i < routesPerPacket ; i++){
-        for( int j = 0 ; j < ADDR_LENGTH ; j++){
-            data[dataLength] = _routeTable[i].destination[j];
-            dataLength++;
-        }
-        data[dataLength] = _routeTable[i].distance;
-        dataLength++;
-        data[dataLength] = _routeTable[i].metric;
-        dataLength++;
-    }
-    uint8_t nextHop[ADDR_LENGTH] = { 0xaf, 0xff, 0xff, 0xff };
-    Packet packet = buildPacket(1, nextHop, data, dataLength);
-    return packet;
-}
-*/
-
 /* Entry point to route data
 */
 int LL2Class::route(uint8_t ttl, uint8_t source[ADDR_LENGTH], uint8_t hopCount, Datagram datagram, size_t length, int broadcast){
@@ -539,8 +578,11 @@ void LL2Class::receive(){
     }
     Serial.printf("\r\n");
     #endif
-    parseHeader(packet);
-    if(memcmp(packet.datagram.destination, _localAddress, ADDR_LENGTH) == 0 || 
+    parseForRoutes(packet);
+    if(memcmp(packet.receiver, _routingAddr, ADDR_LENGTH) == 0){
+        // packet contains routing table info, do nothing besides parse
+        return;
+    }else if(memcmp(packet.datagram.destination, _localAddress, ADDR_LENGTH) == 0 || 
       memcmp(packet.receiver, _broadcastAddr, ADDR_LENGTH) == 0){
       // packet is meant for me (or everyone)
       L2toL3.write(packet);
@@ -575,9 +617,9 @@ int LL2Class::daemon(){
     int ret = -1;
     // try adding a routing packet to L2toL1 buffer, if interval is up and routing is enabled
     if (Layer1.getTime() - _lastRoutingTime > _routingInterval && _disableRoutingPackets == 0) {
-        //Packet routingPacket = buildRoutingPacket();
+        Packet routingPacket = buildRoutingPacket();
         // need to init with broadcast addr and then loop through routing table to build routing table
-        //L2toL1.write(routingPacket);
+        L2toL1.write(routingPacket);
         _lastRoutingTime = Layer1.getTime();
     }
 
