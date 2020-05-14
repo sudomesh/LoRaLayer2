@@ -281,7 +281,7 @@ uint8_t LL2Class::calculateMetric(int entry){
 }
 
 int LL2Class::checkNeighborTable(NeighborTableEntry neighbor){
-    int entry = _routeEntry;
+    int entry = _neighborEntry;
     for( int i = 0 ; i < _neighborEntry ; i++){
         //had to use memcmp instead of strcmp?
         if(memcmp(neighbor.address, _neighborTable[i].address, sizeof(neighbor.address)) == 0){
