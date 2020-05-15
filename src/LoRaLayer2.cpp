@@ -434,9 +434,6 @@ int LL2Class::parseRoutingTable(Packet packet, int n_entry){
     int numberOfRoutes = (packet.totalLength - HEADER_LENGTH) / (ADDR_LENGTH+2);
     uint8_t data[packet.totalLength - HEADER_LENGTH];
     memcpy(data, &packet.datagram, sizeof(data));
-    //NeighborTableEntry neighbor;
-    //memcpy(neighbor.address, packet.sender, sizeof(neighbor.address));
-    //int n_entry = checkNeighborTable(neighbor);
     for( int i = 0 ; i < numberOfRoutes ; i++){
         RoutingTableEntry route;
         memcpy(route.destination, data + (ADDR_LENGTH+2)*i, ADDR_LENGTH);
@@ -444,13 +441,11 @@ int LL2Class::parseRoutingTable(Packet packet, int n_entry){
         route.distance = data[(ADDR_LENGTH+2)*i + ADDR_LENGTH];
         route.distance++; // add a hop to distance
         float metric = (float) data[(ADDR_LENGTH+2)*i + ADDR_LENGTH+1];
-
+        float hopRatio = 1/((float)route.distance);
+        // average neighbor metric with rest of route metric
+        route.metric = (uint8_t) (((float) _neighborTable[n_entry].metric)*(hopRatio) + ((float)metric)*(1-hopRatio));
         entry = checkRoutingTable(route);
         if(entry > 0){
-            // average neighbor metric with rest of route metric
-            float hopRatio = 1/((float)route.distance);
-            metric = ((float) _neighborTable[n_entry].metric)*(hopRatio) + ((float)route.metric)*(1-hopRatio);
-            route.metric = (uint8_t) metric;
             if(getRouteEntry() <= 40){
                 updateRouteTable(route, entry);
             }
