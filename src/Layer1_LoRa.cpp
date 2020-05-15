@@ -17,7 +17,7 @@ Layer1Class::Layer1Class()
 
 int Layer1Class::debug_printf(const char* format, ...) {
 
-    if(DEBUG){
+#ifdef DEBUG
         int ret;
         va_list args;
         va_start(args, format);
@@ -25,9 +25,9 @@ int Layer1Class::debug_printf(const char* format, ...) {
         va_end(args);
         fflush(stderr);
         return ret;
-    }else{
+#else
         return 0;
-    }
+#endif
 }
 
 /* Public access to local variables
