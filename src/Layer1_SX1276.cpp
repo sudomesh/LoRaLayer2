@@ -1,7 +1,7 @@
 #ifdef RL_SX1276
 #include <Layer1_SX1276.h>
 Layer1Class::Layer1Class(SX1276 *lora, int mode, int cs, int reset, int dio, uint8_t sf, uint32_t frequency, int power) 
-: _LoRa{lora}, 
+: _LoRa(lora),
   _mode(mode),
   _csPin(cs),
   _resetPin(reset),
@@ -36,7 +36,15 @@ int Layer1Class::spreadingFactor(){
 // Send packet function
 int Layer1Class::sendPacket(char* data, size_t len){
     int ret = 0;
-    int state = _LoRa->transmit((byte*)data, len);
+    #ifdef LL2_DEBUG
+    Serial.printf("Layer1::sendPacket(): data = ");
+    for(int i = 0; i < len; i++){
+      Serial.printf("%c", data[i]);
+    }
+    Serial.printf("\r\n");
+    #endif
+    data[len] = '/0';
+    int state = _LoRa->transmit((uint8_t*)data, len+1);
     if (state == ERR_PACKET_TOO_LONG) {
       // packet longer than 256 bytes
       ret = 1;
@@ -84,7 +92,8 @@ int Layer1Class::init(){
 // Transmit polling function
 int Layer1Class::transmit(){
     BufferEntry entry = txBuffer.read();
-    if(entry.length != 0){
+    if(entry.length > 0){
+        Serial.printf("Layer1::transmit(): entry.length: %d\r\n", entry.length);
         sendPacket(entry.data, entry.length);
     }
     return entry.length;
@@ -101,15 +110,23 @@ int Layer1Class::receive(){
         int state = _LoRa->readData(data, len);
         if (state == ERR_NONE) {
           BufferEntry entry;
-          memcpy(&data, &entry, len);
+          memcpy(&entry.data[0], &data[0], len-1); // copy data to buffer, excluding null terminator
           entry.length = len;
           rxBuffer.write(entry);
+          #ifdef LL2_DEBUG
+          Serial.printf("Layer1::receive(): data = ");
+          for(int i = 0; i < len; i++){
+            Serial.printf("%c", data[i]);
+          }
+          Serial.printf("\r\n");
+          #endif
+          ret = len;
         } else if (state == ERR_CRC_MISMATCH) {
             // packet was received, but is malformed
-            ret=1;
+            ret=-1;
         } else {
             // some other error occurred
-            ret=2;
+            ret=-2;
         }
         _LoRa->startReceive();
         _enableInterrupt = true;

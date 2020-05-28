@@ -559,9 +559,6 @@ int LL2Class::init(){
     _startTime = Layer1Class::getTime();
     _lastRoutingTime = _startTime;
     _lastTransmitTime = _startTime;
-    //setAddress(_loopbackAddr, "00000000");
-    //setAddress(_broadcastAddr, "ffffffff");
-    //setAddress(_routingAddr, "afffffff");
     return 0;
 }
 
@@ -581,6 +578,9 @@ int LL2Class::daemon(){
     if (Layer1Class::getTime() - _lastTransmitTime > _dutyInterval){
         int length = LoRa1->transmit();
         if(length > 0){
+          #ifdef LL2_DEBUG
+          Serial.printf("LL2::daemon(): transmitted packet of length: %d\r\n", length);
+          #endif
           _lastTransmitTime = Layer1Class::getTime();
           double airtime = calculateAirtime((double)length, (double)LoRa1->spreadingFactor(), 1, 0, 5, 125);
           _dutyInterval = (int)ceil(airtime/_dutyCycle);
@@ -592,7 +592,9 @@ int LL2Class::daemon(){
     // first check if any interrupts have been set,
     // then check if any packets have been added to Layer1 rxbuffer
     if(LoRa1->receive() > 0){
+        #ifdef LL2_DEBUG
         Serial.printf("LL2Class::daemon: received packet\r\n");
+        #endif
         receive();
     }
 
