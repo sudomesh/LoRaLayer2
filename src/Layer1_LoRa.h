@@ -3,7 +3,9 @@
 
 #include <stdint.h>
 #include <Arduino.h>
+#include <LoRa.h>
 #include <SPI.h>
+#include <packetBuffer.h>
 
 class Layer1Class {
 public:
@@ -12,7 +14,7 @@ public:
     int debug_printf(const char* format, ...);
 
     // Public access to local variables
-    int getTime();
+    static int getTime();
     int loraInitialized();
     int loraCSPin();
     int resetPin();
@@ -26,6 +28,10 @@ public:
     void setSpreadingFactor(uint8_t spreadingFactor);
     void setTxPower(int txPower);
 
+    // Fifo buffers
+    packetBuffer txBuffer;
+    packetBuffer rxBuffer;
+
     // Main public functions
     int init();
     int transmit();
@@ -33,7 +39,7 @@ public:
 
 private:
     // Main private functions
-    static void setFlag(void);
+    static void setFlag(int packetSize);
     int sendPacket(char *data, size_t len);
 
     // Local variables

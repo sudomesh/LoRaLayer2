@@ -1,5 +1,5 @@
+#ifdef RL_SX1276
 #include <Layer1_SX1276.h>
-//#ifdef RL_SX1276
 Layer1Class::Layer1Class(SX1276 *lora, int mode, int cs, int reset, int dio, uint8_t sf, uint32_t frequency, int power) 
 : _LoRa{lora}, 
   _mode(mode),
@@ -116,4 +116,4 @@ int Layer1Class::receive(){
     }
     return ret;
 }
-//#endif
+#endif

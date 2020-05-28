@@ -107,14 +107,14 @@ int LL2Class::writeToBuffer(packetBuffer *buffer, Packet packet){
 Packet LL2Class::readFromBuffer(packetBuffer *buffer){
     Packet packet;
     BufferEntry entry = buffer->read();
-    memcpy(&packet, &entry.data, entry.length);
+    memcpy(&packet, &entry.data[0], entry.length);
     return packet;
 }
 
 /* Layer 3 tx/rx wrappers
 */
 int LL2Class::writeData(Datagram datagram, size_t length){
-    #ifdef DEBUG
+    #ifdef LL2_DEBUG
     Serial.printf("LoRaLayer2::writeData(): datagram.message = ");
     for(int i = 0; i < length-5; i++){
       Serial.printf("%c", datagram.message[i]);
@@ -127,10 +127,19 @@ int LL2Class::writeData(Datagram datagram, size_t length){
 }
 
 Packet LL2Class::readData(){
-  Packet packet;
-  BufferEntry entry = rxBuffer.read();
-  memcpy(&packet, &entry.data, entry.length);
-  return packet;
+    Packet packet;
+    BufferEntry entry = rxBuffer.read();
+    memcpy(&packet, &entry.data[0], entry.length);
+    #ifdef LL2_DEBUG
+    if(entry.length > 0){
+      Serial.printf("LoRaLayer2::readData(): packet.datagram.message = ");
+      for(int i = 0; i < entry.length-HEADER_LENGTH-5; i++){
+        Serial.printf("%c", packet.datagram.message[i]);
+      }
+      Serial.printf("\r\n");
+    }
+    #endif
+    return packet;
 }
 
 /* Print out functions, for convenience
@@ -511,15 +520,17 @@ int LL2Class::route(uint8_t ttl, uint8_t source[ADDR_LENGTH], uint8_t hopCount, 
 void LL2Class::receive(){
   Packet packet;
   BufferEntry entry = LoRa1->rxBuffer.read();
-  memcpy(&packet, &entry.data, entry.length);
-  if(packet.totalLength > 0){
-    #ifdef DEBUG
+  memcpy(&packet, entry.data, entry.length);
+
+    #ifdef LL2_DEBUG
     Serial.printf("LoRaLayer2::receive(): packet.datagram.message = ");
     for(int i = 0; i < packet.totalLength-HEADER_LENGTH-5; i++){
       Serial.printf("%c", packet.datagram.message[i]);
     }
     Serial.printf("\r\n");
     #endif
+
+  if(packet.totalLength > 0){
     parseForRoutes(packet);
     if(memcmp(packet.receiver, ROUTING, ADDR_LENGTH) == 0){
         // packet contains routing table info, do nothing besides parse
@@ -577,8 +588,13 @@ int LL2Class::daemon(){
         }
     }
 
-    // see if there are any packets to be received (i.e. in L1toL2 buffer)
-    receive();
+    // see if there are any packets to be received
+    // first check if any interrupts have been set,
+    // then check if any packets have been added to Layer1 rxbuffer
+    if(LoRa1->receive() > 0){
+        Serial.printf("LL2Class::daemon: received packet\r\n");
+        receive();
+    }
 
     // returns sequence number of transmitted packet,
     // if no packet transmitted, will return -1

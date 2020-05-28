@@ -1,7 +1,5 @@
 #ifdef ARDUINO_LORA
-#include <LoRa.h>
 #include <Layer1_LoRa.h>
-#include <LoRaLayer2.h>
 
 Layer1Class::Layer1Class()
 : _csPin(LORA_CS),
@@ -11,11 +9,11 @@ Layer1Class::Layer1Class()
   _loraFrequency(915E6),
   _txPower(17),
   _loraInitialized(0),
-  _spiFrequency(100E3),
-{}
+  _spiFrequency(100E3){};
 
 bool _receivedFlag = false;
 bool _enableInterrupt = true;
+int _packetSize = 0;
 
 int Layer1Class::debug_printf(const char* format, ...) {
 
@@ -87,6 +85,15 @@ void Layer1Class::setTxPower(int txPower){
 // Send packet function
 int Layer1Class::sendPacket(char* data, size_t len){
     int ret = 0;
+
+    #ifdef LL2_DEBUG
+    Serial.printf("Layer1::sendPacket(): data = ");
+    for(int i = 0; i < len; i++){
+      Serial.printf("%c", data[i]);
+    }
+    Serial.printf("\r\n");
+    #endif
+
     if((ret = LoRa.beginPacket())){
         for( int i = 0 ; i < len ; i++){
             LoRa.write(data[i]);
@@ -104,6 +111,7 @@ void Layer1Class::setFlag(int packetSize) {
         return;
     }
     // we got a packet, set the flag
+    _packetSize = packetSize;
     _receivedFlag = true;
 }
 
@@ -129,29 +137,40 @@ int Layer1Class::init(){
 
 // Transmit polling function
 int Layer1Class::transmit(){
-    char *data = txBuffer.read();
-    size_t len = (size_t)data[1]; //this is a small hack to get the packet length by inspecting the byte where it is store in the packet
-    if(len != 0){
-        sendPacket(data, len);
+    BufferEntry entry = txBuffer.read();
+    if(entry.length != 0){
+        sendPacket(entry.data, entry.length);
     }
-    return len;
+    return entry.length;
 }
 
 // Receive polling function
 int Layer1Class::receive(){
     int ret = 0; 
     if(_receivedFlag) {
+        Serial.printf("Layer1Class::receive(): _packetSize = %d\r\n", _packetSize);
         _enableInterrupt = false;
         _receivedFlag = false;
-
-        if (_packetSize != 0){
-            char data[PACKET_LENGTH];
+        if (_packetSize > 0){
+            char data[MAX_PACKET_SIZE];
             int len = 0;
             while (LoRa.available()) {
                 data[len] = (char)LoRa.read();
                 len++;
             }
-            rxBuffer.write(data, len);
+            BufferEntry entry;
+            memcpy(&entry.data[0], &data[0], len);
+            entry.length = len;
+            rxBuffer.write(entry);
+
+            #ifdef LL2_DEBUG
+            Serial.printf("Layer1::receive(): data = ");
+            for(int i = 0; i < len; i++){
+              Serial.printf("%c", data[i]);
+            }
+            Serial.printf("\r\n");
+            #endif
+
             ret = _packetSize;
         }
         // reset packetSize to zero and renable interrupt

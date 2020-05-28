@@ -10,15 +10,18 @@ packetBuffer::packetBuffer()
 
 // reads a packet from buffer
 BufferEntry packetBuffer::read(){
-    // clear tmp_data of any previous packet data
-    BufferEntry entry;
-    memset(&entry, 0, sizeof(entry));
-    if (head != tail){
-      tail = (tail + 1) % BUFFERSIZE;
-      // copy contents of buffer tail to tmp_data
-      memcpy(&entry, &buffer[tail], entry.length);
+    if (head == tail){
+        // if buffer empty, return empty entry
+        BufferEntry entry;
+        memset(&entry.data, 0, sizeof(entry.data));
+        entry.length = 0;
+        return entry;
     }
-    return entry;
+    else{
+        // otherwise return entry from tail
+        tail = (tail + 1) % BUFFERSIZE;
+        return buffer[tail];
+    }
 }
 
 // writes a packet to buffer
