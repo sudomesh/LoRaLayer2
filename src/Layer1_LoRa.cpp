@@ -1,19 +1,21 @@
+#ifdef ARDUINO_LORA
 #include <LoRa.h>
-#include <Layer1.h>
+#include <Layer1_LoRa.h>
 #include <LoRaLayer2.h>
-#ifdef LORA 
 
 Layer1Class::Layer1Class()
-{
-    _loraInitialized = 0;
-    _csPin = L1_DEFAULT_CS_PIN;
-    _resetPin = L1_DEFAULT_RESET_PIN;
-    _DIOPin = L1_DEFAULT_DIO0_PIN;
-    _spiFrequency = 100E3;
-    _loraFrequency = 915E6;
-    _spreadingFactor = 9;
-    _txPower = 17;
-}
+: _csPin(LORA_CS),
+  _resetPin(LORA_RST),
+  _DIOPin(LORA_IRQ),
+  _spreadingFactor(9),
+  _loraFrequency(915E6),
+  _txPower(17),
+  _loraInitialized(0),
+  _spiFrequency(100E3),
+{}
+
+bool _receivedFlag = false;
+bool _enableInterrupt = true;
 
 int Layer1Class::debug_printf(const char* format, ...) {
 
@@ -80,43 +82,10 @@ void Layer1Class::setTxPower(int txPower){
     _txPower = txPower;
 }
 
-/* Receive packet callback
+/* Private functions
 */
-void Layer1Class::onReceive(int packetSize) {
-    if (packetSize == 0) return; // if there's no packet, return
-    char incoming[PACKET_LENGTH];
-    int length = 0;
-    while (LoRa.available()) {
-        incoming[length] = (char)LoRa.read();
-        length++;
-    }
-    uint8_t* data = ( uint8_t* ) incoming;
-    LL2.writePacket(data, length);
-    return;
-}
-
-/* Initialization
-*/
-int Layer1Class::init(){
-    LoRa.setPins(_csPin, _resetPin, _DIOPin); // set CS, reset, DIO pin
-    LoRa.setSPIFrequency(_spiFrequency);
-    LoRa.setTxPower(_txPower);
-
-    if (!LoRa.begin(_loraFrequency)) { // defaults to 915MHz, can also be 433MHz or 868Mhz
-        return _loraInitialized;
-    }
-
-    LoRa.setSpreadingFactor(_spreadingFactor); // ranges from 6-12, default 9
-    LoRa.onReceive(onReceive);
-    LoRa.receive();
-
-    _loraInitialized = 1;
-    return _loraInitialized;
-}
-
-/* Send/transmit data
-*/
-int Layer1Class::sendPacket(char* data, int len){
+// Send packet function
+int Layer1Class::sendPacket(char* data, size_t len){
     int ret = 0;
     if((ret = LoRa.beginPacket())){
         for( int i = 0 ; i < len ; i++){
@@ -128,14 +97,67 @@ int Layer1Class::sendPacket(char* data, int len){
     return ret;
 }
 
-int Layer1Class::transmit(){
-    Packet packet = LL2.readPacket();
-    if(packet.totalLength != 0){
-        sendPacket((char*)&packet, packet.totalLength);
+// Receive packet callback
+void Layer1Class::setFlag(int packetSize) {
+    // check if the interrupt is enabled
+    if(!_enableInterrupt) {
+        return;
     }
-    return packet.totalLength;
+    // we got a packet, set the flag
+    _receivedFlag = true;
 }
 
-Layer1Class Layer1;
+/*Main public functions
+*/
+// Initialization
+int Layer1Class::init(){
+    LoRa.setPins(_csPin, _resetPin, _DIOPin); // set CS, reset, DIO pin
+    LoRa.setSPIFrequency(_spiFrequency);
+    LoRa.setTxPower(_txPower);
 
+    if (!LoRa.begin(_loraFrequency)) { // defaults to 915MHz, can also be 433MHz or 868Mhz
+        return _loraInitialized;
+    }
+
+    LoRa.setSpreadingFactor(_spreadingFactor); // ranges from 6-12, default 9
+    LoRa.onReceive(setFlag);
+    LoRa.receive();
+
+    _loraInitialized = 1;
+    return _loraInitialized;
+}
+
+// Transmit polling function
+int Layer1Class::transmit(){
+    char *data = txBuffer.read();
+    size_t len = (size_t)data[1]; //this is a small hack to get the packet length by inspecting the byte where it is store in the packet
+    if(len != 0){
+        sendPacket(data, len);
+    }
+    return len;
+}
+
+// Receive polling function
+int Layer1Class::receive(){
+    int ret = 0; 
+    if(_receivedFlag) {
+        _enableInterrupt = false;
+        _receivedFlag = false;
+
+        if (_packetSize != 0){
+            char data[PACKET_LENGTH];
+            int len = 0;
+            while (LoRa.available()) {
+                data[len] = (char)LoRa.read();
+                len++;
+            }
+            rxBuffer.write(data, len);
+            ret = _packetSize;
+        }
+        // reset packetSize to zero and renable interrupt
+        _packetSize = 0;
+        _enableInterrupt = true;
+    }
+    return ret;
+}
 #endif

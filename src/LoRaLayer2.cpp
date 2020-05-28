@@ -1,51 +1,22 @@
-#include <Layer1.h>
 #include <LoRaLayer2.h>
 
-/* Fifo Buffer Class
-*/
-packetBuffer::packetBuffer()
-{
-    head = 0;
-    tail = 0;
-}
-
-// reads a packet from buffer
-Packet packetBuffer::read(){
-    Packet packet;
-    memset(&packet, 0, sizeof(packet));
-    if (head == tail){
-        // if buffer empty, return empty packet
-        return packet;
-    }
-    tail = (tail + 1) % BUFFERSIZE;
-    return buffer[tail]; // otherwise return packet from tail
-}
-
-// writes a packet to buffer
-int packetBuffer::write(Packet packet) {
-    if (((head + 1) % BUFFERSIZE) == tail){
-      // if full, return the size of the buffer
-      return BUFFERSIZE;
-    }
-    head = (head + 1) % BUFFERSIZE;
-    memset(&buffer[head], 0, sizeof(buffer[head]));
-    buffer[head] = packet; // otherwise store packet in buffer
-    return head-tail; // and return the packet's place in line
-}
+uint8_t BROADCAST[ADDR_LENGTH] = {0xff, 0xff, 0xff, 0xff}; 
+uint8_t LOOPBACK[ADDR_LENGTH] = {0x00, 0x00, 0x00, 0x00}; 
+uint8_t ROUTING[ADDR_LENGTH] = {0xaf, 0xff, 0xff, 0xff}; 
 
 /* LoRaLayer2 Class
 */
-LL2Class::LL2Class()
-{
-    _messageCount = 0;
-    _packetSuccessWeight = 1;
-    _neighborEntry = 0;
-    _routeEntry = 0;
-    _routingInterval = 15000;
-    _disableRoutingPackets = 0;
-    _dutyInterval = 0;
-    _dutyCycle = .1;
-}
+LL2Class::LL2Class(Layer1Class *lora_1, Layer1Class *lora_2)
+  : LoRa1{lora_1}, 
+    LoRa2{lora_2}, 
+    _messageCount(0),
+    _packetSuccessWeight(1),
+    _neighborEntry(0),
+    _routeEntry(0),
+    _routingInterval(15000),
+    _disableRoutingPackets(0),
+    _dutyInterval(0),
+    _dutyCycle(.1){};
 
 /* Public access to local variables
 */
@@ -55,18 +26,6 @@ uint8_t LL2Class::messageCount(){
 
 uint8_t* LL2Class::localAddress(){
     return _localAddress;
-}
-
-uint8_t* LL2Class::broadcastAddr(){
-    return _broadcastAddr;
-}
-
-uint8_t* LL2Class::loopbackAddr(){
-    return _loopbackAddr;
-}
-
-uint8_t* LL2Class::routingAddr(){
-    return _routingAddr;
 }
 
 int LL2Class::getRouteEntry(){
@@ -112,19 +71,16 @@ void LL2Class::console_printf(const char* format, ...){
   Datagram datagram = {0xff, 0xff, 0xff, 0xff, 'i'};
   memcpy(datagram.message, str, len);
   memcpy(&packet.datagram, &datagram, len+5);
-  L2toL3.write(packet);
+  char data[PACKET_LENGTH];
+  memcpy(&data, &packet, packet.totalLength);
+  rxBuffer.write(data, (size_t)packet.totalLength);
   free(str);
 }
 
 /* User configurable settings
 */
-int LL2Class::setLocalAddress(const char* macString){
+void LL2Class::setLocalAddress(const char* macString){
   setAddress(_localAddress, macString);
-  if(_localAddress){
-    return 1;
-  }else{
-    return 0;
-  }
 }
 
 long LL2Class::setInterval(long interval){
@@ -143,6 +99,7 @@ void LL2Class::setDutyCycle(double dutyCycle){
 
 /* Layer 1 wrappers for packetBuffers
 */
+/*
 void LL2Class::writePacket(uint8_t* data, size_t length){
     if(length <= 0){
         return;
@@ -164,6 +121,7 @@ void LL2Class::writePacket(uint8_t* data, size_t length){
 Packet LL2Class::readPacket(){
     return L2toL1.read();
 }
+*/
 
 /* Layer 3 wrappers for packetBuffers
 */
@@ -181,7 +139,10 @@ int LL2Class::writeData(Datagram datagram, size_t length){
 }
 
 Packet LL2Class::readData(){
-    return L2toL3.read();
+  Packet packet;
+  char *data = rxBuffer.read();
+  memcpy(&packet, data, sizeof(packet)); 
+  return packet;
 }
 
 /* Print out functions, for convenience
@@ -458,7 +419,7 @@ void LL2Class::parseForRoutes(Packet packet){
     int n_entry = parseNeighbor(packet);
     int r_entry = -1;
 
-    if(memcmp(packet.receiver, _routingAddr, ADDR_LENGTH) == 0){
+    if(memcmp(packet.receiver, ROUTING, ADDR_LENGTH) == 0){
       // packet contains routing table info, parse for routes in datagram only
       parseRoutingTable(packet, n_entry);
       return;
@@ -466,7 +427,7 @@ void LL2Class::parseForRoutes(Packet packet){
 
     // Parse for receiver address route
     if(memcmp(packet.receiver, _localAddress, ADDR_LENGTH) != 0 && 
-      memcmp(packet.receiver, _broadcastAddr, ADDR_LENGTH) != 0){
+      memcmp(packet.receiver, BROADCAST, ADDR_LENGTH) != 0){
       // packet was meant for someone else, but still parse for receiver route
       RoutingTableEntry rcv_route;
       memcpy(rcv_route.destination, packet.receiver, ADDR_LENGTH);
@@ -501,7 +462,7 @@ void LL2Class::parseForRoutes(Packet packet){
     // Parse for destination address route
     if(memcmp(packet.datagram.destination, _localAddress, ADDR_LENGTH) != 0 && 
       memcmp(packet.datagram.destination, packet.receiver, ADDR_LENGTH) != 0 &&
-      memcmp(packet.datagram.destination, _broadcastAddr, ADDR_LENGTH) != 0){
+      memcmp(packet.datagram.destination, BROADCAST, ADDR_LENGTH) != 0){
       //datagram destination is not my address, the receiver address, or the broadcast address
       RoutingTableEntry dst_route;
       memcpy(dst_route.destination, packet.datagram.destination, ADDR_LENGTH);
@@ -532,15 +493,17 @@ int LL2Class::route(uint8_t ttl, uint8_t source[ADDR_LENGTH], uint8_t hopCount, 
         // leave metric empty?
       }
       
-      if(memcmp(datagram.destination, _loopbackAddr, ADDR_LENGTH) == 0){
+      if(memcmp(datagram.destination, LOOPBACK, ADDR_LENGTH) == 0){
         //Loopback
         // this should push back into the L3 buffer
       }
-      else if(memcmp(datagram.destination, _broadcastAddr, ADDR_LENGTH) == 0){
+      else if(memcmp(datagram.destination, BROADCAST, ADDR_LENGTH) == 0){
         //Broadcast packet, only forward if explicity told to
         if(broadcast == 1){
-          Packet packet = buildPacket(ttl, _broadcastAddr, source, hopCount, metric, datagram, length);
-          ret = L2toL1.write(packet);
+          Packet packet = buildPacket(ttl, BROADCAST, source, hopCount, metric, datagram, length);
+          char data_broadcast[PACKET_LENGTH];
+          memcpy(&data_broadcast, &packet, packet.totalLength);
+          ret = LoRa1->txBuffer.write(data_broadcast, packet.totalLength);
         }
       }
       else{
@@ -550,7 +513,9 @@ int LL2Class::route(uint8_t ttl, uint8_t source[ADDR_LENGTH], uint8_t hopCount, 
           // build packet with new ttl, nextHop, and route metric
           Packet packet = buildPacket(ttl, _routeTable[dst_entry].nextHop, source, hopCount, metric, datagram, length);
           // return packet's position in buffer
-          ret = L2toL1.write(packet);
+          char data_route[PACKET_LENGTH];
+          memcpy(&data_route, &packet, packet.totalLength);
+          ret = LoRa1->txBuffer.write(data_route, packet.totalLength);
         }
       }
     }
@@ -560,7 +525,9 @@ int LL2Class::route(uint8_t ttl, uint8_t source[ADDR_LENGTH], uint8_t hopCount, 
 /* Receive and decide function
 */
 void LL2Class::receive(){
-  Packet packet = L1toL2.read();
+  Packet packet;
+  char *data = LoRa1->rxBuffer.read();
+  memcpy(&packet, data, sizeof(packet)); 
   if(packet.totalLength > 0){
     #ifdef DEBUG
     Serial.printf("LoRaLayer2::receive(): packet.datagram.message = ");
@@ -570,13 +537,16 @@ void LL2Class::receive(){
     Serial.printf("\r\n");
     #endif
     parseForRoutes(packet);
-    if(memcmp(packet.receiver, _routingAddr, ADDR_LENGTH) == 0){
+    if(memcmp(packet.receiver, ROUTING, ADDR_LENGTH) == 0){
         // packet contains routing table info, do nothing besides parse
         return;
     }else if(memcmp(packet.datagram.destination, _localAddress, ADDR_LENGTH) == 0 || 
-      memcmp(packet.receiver, _broadcastAddr, ADDR_LENGTH) == 0){
+      memcmp(packet.receiver, BROADCAST, ADDR_LENGTH) == 0){
       // packet is meant for me (or everyone)
-      L2toL3.write(packet);
+      char data[PACKET_LENGTH];
+      memcpy(&data, &packet, packet.totalLength);
+      rxBuffer.write(data, packet.totalLength);
+
     }else if(memcmp(packet.receiver, _localAddress, ADDR_LENGTH) == 0){
       // packet is meant for someone else
       // but I am the intended forwarder
@@ -593,12 +563,12 @@ void LL2Class::receive(){
 /* Initialization function
 */
 int LL2Class::init(){
-    _startTime = Layer1.getTime();
+    _startTime = Layer1Class::getTime();
     _lastRoutingTime = _startTime;
     _lastTransmitTime = _startTime;
-    setAddress(_loopbackAddr, "00000000");
-    setAddress(_broadcastAddr, "ffffffff");
-    setAddress(_routingAddr, "afffffff");
+    //setAddress(_loopbackAddr, "00000000");
+    //setAddress(_broadcastAddr, "ffffffff");
+    //setAddress(_routingAddr, "afffffff");
     return 0;
 }
 
@@ -607,19 +577,21 @@ int LL2Class::init(){
 int LL2Class::daemon(){
     int ret = -1;
     // try adding a routing packet to L2toL1 buffer, if interval is up and routing is enabled
-    if (Layer1.getTime() - _lastRoutingTime > _routingInterval && _disableRoutingPackets == 0) {
+    if (Layer1Class::getTime() - _lastRoutingTime > _routingInterval && _disableRoutingPackets == 0) {
         Packet routingPacket = buildRoutingPacket();
         // need to init with broadcast addr and then loop through routing table to build routing table
-        L2toL1.write(routingPacket);
-        _lastRoutingTime = Layer1.getTime();
+        char data[PACKET_LENGTH];
+        memcpy(&data, &routingPacket, routingPacket.totalLength);
+        LoRa1->txBuffer.write(data, routingPacket.totalLength);
+        _lastRoutingTime = Layer1Class::getTime();
     }
 
     // try transmitting a packet
-    if (Layer1.getTime() - _lastTransmitTime > _dutyInterval){
-        int length = Layer1.transmit();
+    if (Layer1Class::getTime() - _lastTransmitTime > _dutyInterval){
+        int length = LoRa1->transmit();
         if(length > 0){
-          _lastTransmitTime = Layer1.getTime();
-          double airtime = calculateAirtime((double)length, (double)Layer1.spreadingFactor(), 1, 0, 5, 125);
+          _lastTransmitTime = Layer1Class::getTime();
+          double airtime = calculateAirtime((double)length, (double)LoRa1->spreadingFactor(), 1, 0, 5, 125);
           _dutyInterval = (int)ceil(airtime/_dutyCycle);
           _messageCount = (_messageCount + 1) % 256;
         }
@@ -632,5 +604,3 @@ int LL2Class::daemon(){
     // if no packet transmitted, will return -1
     return ret;
 }
-
-LL2Class LL2;
