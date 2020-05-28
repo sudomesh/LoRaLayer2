@@ -71,9 +71,7 @@ void LL2Class::console_printf(const char* format, ...){
   Datagram datagram = {0xff, 0xff, 0xff, 0xff, 'i'};
   memcpy(datagram.message, str, len);
   memcpy(&packet.datagram, &datagram, len+5);
-  char data[PACKET_LENGTH];
-  memcpy(&data, &packet, packet.totalLength);
-  rxBuffer.write(data, (size_t)packet.totalLength);
+  writeToBuffer(&rxBuffer, packet);
   free(str);
 }
 
@@ -97,33 +95,23 @@ void LL2Class::setDutyCycle(double dutyCycle){
     _dutyCycle = dutyCycle;
 }
 
-/* Layer 1 wrappers for packetBuffers
+/* private wrappers for packetBuffers
 */
-/*
-void LL2Class::writePacket(uint8_t* data, size_t length){
-    if(length <= 0){
-        return;
-    }
-    data[length] = '\0';
+int LL2Class::writeToBuffer(packetBuffer *buffer, Packet packet){
+    BufferEntry entry;
+    memcpy(&entry, &packet, packet.totalLength);
+    entry.length = packet.totalLength;
+    return buffer->write(entry);
+}
+
+Packet LL2Class::readFromBuffer(packetBuffer *buffer){
     Packet packet;
-    memcpy(&packet, data, length);
-    L1toL2.write(packet);
-    #ifdef DEBUG
-    Serial.printf("LoRaLayer2::writePacket(): packet.datagram.message = ");
-    for(int i = 0; i < length-HEADER_LENGTH-5; i++){
-      Serial.printf("%c", packet.datagram.message[i]);
-    }
-    Serial.printf("\r\n");
-    #endif
-    return;
+    BufferEntry entry = buffer->read();
+    memcpy(&packet, &entry.data, entry.length);
+    return packet;
 }
 
-Packet LL2Class::readPacket(){
-    return L2toL1.read();
-}
-*/
-
-/* Layer 3 wrappers for packetBuffers
+/* Layer 3 tx/rx wrappers
 */
 int LL2Class::writeData(Datagram datagram, size_t length){
     #ifdef DEBUG
@@ -140,8 +128,8 @@ int LL2Class::writeData(Datagram datagram, size_t length){
 
 Packet LL2Class::readData(){
   Packet packet;
-  char *data = rxBuffer.read();
-  memcpy(&packet, data, sizeof(packet)); 
+  BufferEntry entry = rxBuffer.read();
+  memcpy(&packet, &entry.data, entry.length);
   return packet;
 }
 
@@ -501,9 +489,7 @@ int LL2Class::route(uint8_t ttl, uint8_t source[ADDR_LENGTH], uint8_t hopCount, 
         //Broadcast packet, only forward if explicity told to
         if(broadcast == 1){
           Packet packet = buildPacket(ttl, BROADCAST, source, hopCount, metric, datagram, length);
-          char data_broadcast[PACKET_LENGTH];
-          memcpy(&data_broadcast, &packet, packet.totalLength);
-          ret = LoRa1->txBuffer.write(data_broadcast, packet.totalLength);
+          ret = writeToBuffer(&LoRa1->txBuffer, packet);
         }
       }
       else{
@@ -513,9 +499,7 @@ int LL2Class::route(uint8_t ttl, uint8_t source[ADDR_LENGTH], uint8_t hopCount, 
           // build packet with new ttl, nextHop, and route metric
           Packet packet = buildPacket(ttl, _routeTable[dst_entry].nextHop, source, hopCount, metric, datagram, length);
           // return packet's position in buffer
-          char data_route[PACKET_LENGTH];
-          memcpy(&data_route, &packet, packet.totalLength);
-          ret = LoRa1->txBuffer.write(data_route, packet.totalLength);
+          ret = writeToBuffer(&LoRa1->txBuffer, packet);
         }
       }
     }
@@ -526,8 +510,8 @@ int LL2Class::route(uint8_t ttl, uint8_t source[ADDR_LENGTH], uint8_t hopCount, 
 */
 void LL2Class::receive(){
   Packet packet;
-  char *data = LoRa1->rxBuffer.read();
-  memcpy(&packet, data, sizeof(packet)); 
+  BufferEntry entry = LoRa1->rxBuffer.read();
+  memcpy(&packet, &entry.data, entry.length);
   if(packet.totalLength > 0){
     #ifdef DEBUG
     Serial.printf("LoRaLayer2::receive(): packet.datagram.message = ");
@@ -543,9 +527,7 @@ void LL2Class::receive(){
     }else if(memcmp(packet.datagram.destination, _localAddress, ADDR_LENGTH) == 0 || 
       memcmp(packet.receiver, BROADCAST, ADDR_LENGTH) == 0){
       // packet is meant for me (or everyone)
-      char data[PACKET_LENGTH];
-      memcpy(&data, &packet, packet.totalLength);
-      rxBuffer.write(data, packet.totalLength);
+      writeToBuffer(&rxBuffer, packet);
 
     }else if(memcmp(packet.receiver, _localAddress, ADDR_LENGTH) == 0){
       // packet is meant for someone else
@@ -580,9 +562,7 @@ int LL2Class::daemon(){
     if (Layer1Class::getTime() - _lastRoutingTime > _routingInterval && _disableRoutingPackets == 0) {
         Packet routingPacket = buildRoutingPacket();
         // need to init with broadcast addr and then loop through routing table to build routing table
-        char data[PACKET_LENGTH];
-        memcpy(&data, &routingPacket, routingPacket.totalLength);
-        LoRa1->txBuffer.write(data, routingPacket.totalLength);
+        ret = writeToBuffer(&LoRa1->txBuffer, routingPacket);
         _lastRoutingTime = Layer1Class::getTime();
     }
 

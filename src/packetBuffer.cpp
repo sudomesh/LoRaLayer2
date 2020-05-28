@@ -9,28 +9,30 @@ packetBuffer::packetBuffer()
 }
 
 // reads a packet from buffer
-char* packetBuffer::read(){
+BufferEntry packetBuffer::read(){
     // clear tmp_data of any previous packet data
-    memset(&tmp_data, 0, sizeof(tmp_data));
+    BufferEntry entry;
+    memset(&entry, 0, sizeof(entry));
     if (head != tail){
       tail = (tail + 1) % BUFFERSIZE;
       // copy contents of buffer tail to tmp_data
-      memcpy(&tmp_data, &buffer[tail][0], sizeof(tmp_data));
+      memcpy(&entry, &buffer[tail], entry.length);
     }
-    return tmp_data;
+    return entry;
 }
 
 // writes a packet to buffer
-int packetBuffer::write(char data[MAX_PACKET_SIZE], size_t len) {
+int packetBuffer::write(BufferEntry entry) {
     int ret = BUFFERSIZE;
     // if full, return the size of the buffer
     if (((head + 1) % BUFFERSIZE) != tail){
         head = (head + 1) % BUFFERSIZE;
         // clear any previous data stored in buffer
-        memset(&buffer[head][0], 0, sizeof(buffer[head][0]));
+        memset(&buffer[head], 0, sizeof(buffer[head]));
         // copy new data into buffer
-        memcpy(&buffer[head][0], &data[0], len);
+        buffer[head] = entry;
         ret = head-tail; // and return the packet's place in line
     }
+    // if full, return the size of the buffer
     return ret;
 }

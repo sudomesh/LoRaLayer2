@@ -5,19 +5,22 @@
 #include <unistd.h>
 #include <stdint.h>
 #include <stdarg.h>
-//#include <LoRaLayer2.h>
 #define BUFFERSIZE 16
 #define MAX_PACKET_SIZE 255
+
+struct BufferEntry {
+  char data[MAX_PACKET_SIZE];
+  size_t length;
+};
 
 class packetBuffer {
   public:
     // use pointer to char instead? and then copy that raw data into a packet
-    char* read();
-    int write(char data[MAX_PACKET_SIZE], size_t len);
+    BufferEntry read();
+    int write(BufferEntry entry);
     packetBuffer();
   private:
-    char buffer[BUFFERSIZE][MAX_PACKET_SIZE];
-    char tmp_data[MAX_PACKET_SIZE];
+    BufferEntry buffer[BUFFERSIZE];
     int head;
     int tail;
 };

@@ -85,9 +85,7 @@ public:
     long setInterval(long interval);
     void setDutyCycle(double dutyCycle);
 
-    // Wrappers for packetBuffers
-    //void writePacket(uint8_t* data, size_t length);
-    //Packet readPacket();
+    // Layer 3 tx/rx wrappers
     int writeData(Datagram datagram, size_t length);
     Packet readData();
 
@@ -101,6 +99,10 @@ public:
     int daemon();
 
 private:
+    // Wrappers for packetBuffers
+    int writeToBuffer(packetBuffer *buffer, Packet packet);
+    Packet readFromBuffer(packetBuffer *buffer);
+
     // General purpose utility functions
     uint8_t hexDigit(char ch);
     void setAddress(uint8_t* addr, const char* macString);

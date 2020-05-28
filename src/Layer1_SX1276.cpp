@@ -83,12 +83,11 @@ int Layer1Class::init(){
 
 // Transmit polling function
 int Layer1Class::transmit(){
-    char *data = txBuffer.read();
-    size_t len = (size_t)data[1]; //this is a small hack to get the packet length by inspecting the byte where it is store in the packet
-    if(len != 0){
-        sendPacket(data, len);
+    BufferEntry entry = txBuffer.read();
+    if(entry.length != 0){
+        sendPacket(entry.data, entry.length);
     }
-    return len;
+    return entry.length;
 }
 
 // Receive polling function
@@ -101,7 +100,10 @@ int Layer1Class::receive(){
         byte data[len];
         int state = _LoRa->readData(data, len);
         if (state == ERR_NONE) {
-          rxBuffer.write((char*)data, len);
+          BufferEntry entry;
+          memcpy(&data, &entry, len);
+          entry.length = len;
+          rxBuffer.write(entry);
         } else if (state == ERR_CRC_MISMATCH) {
             // packet was received, but is malformed
             ret=1;
