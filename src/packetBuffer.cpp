@@ -2,26 +2,29 @@
 
 /* Fifo Buffer Class
 */
-packetBuffer::packetBuffer()
+packetBuffer::packetBuffer() :
+  head(0),
+  tail(0)
 {
-    head = 0;
-    tail = 0;
-}
+};
 
 // reads a packet from buffer
 BufferEntry packetBuffer::read(){
+    BufferEntry entry;
     if (head == tail){
         // if buffer empty, return empty entry
         BufferEntry entry;
-        memset(&entry.data, 0, sizeof(entry.data));
+        memset(&entry, 0, sizeof(entry));
         entry.length = 0;
-        return entry;
     }
     else{
         // otherwise return entry from tail
         tail = (tail + 1) % BUFFERSIZE;
-        return buffer[tail];
+        memcpy(&entry, &buffer[tail], sizeof(entry));
+        // clear data stored in tail of buffer
+        memset(&buffer[tail], 0, sizeof(buffer[tail]));
     }
+    return entry;
 }
 
 // writes a packet to buffer

@@ -127,7 +127,7 @@ private:
     void receive();
 
     // Fifo buffer objects
-    packetBuffer rxBuffer; // L2 sending to L3
+    packetBuffer *rxBuffer; // L2 sending to L3
     // NOTE: there is no L2 txBuffer (i.e. L3 sending to L2 a packet to be transmitted) because I have not found a need for one yet
 
     // Local members, variables and tables

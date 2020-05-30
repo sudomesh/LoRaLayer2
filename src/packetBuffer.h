@@ -9,8 +9,8 @@
 #define MAX_PACKET_SIZE 255
 
 struct BufferEntry {
-  char data[MAX_PACKET_SIZE];
-  size_t length;
+  char data[MAX_PACKET_SIZE] = { 0 };
+  size_t length = 0;
 };
 
 class packetBuffer {

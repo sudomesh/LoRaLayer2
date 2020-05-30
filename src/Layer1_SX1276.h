@@ -21,8 +21,8 @@ public:
     int spreadingFactor();
 
     // Fifo buffers
-    packetBuffer txBuffer;
-    packetBuffer rxBuffer;
+    packetBuffer *txBuffer;
+    packetBuffer *rxBuffer;
 
     // Main public functions
     int init();

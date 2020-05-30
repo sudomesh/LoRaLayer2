@@ -9,9 +9,13 @@ Layer1Class::Layer1Class()
   _loraFrequency(915E6),
   _txPower(17),
   _loraInitialized(0),
-  _spiFrequency(100E3){};
+  _spiFrequency(100E3)
+{
+  txBuffer = new packetBuffer();
+  rxBuffer = new packetBuffer();
+};
 
-bool _receivedFlag = false;
+bool _dioFlag = false;
 bool _enableInterrupt = true;
 int _packetSize = 0;
 
@@ -112,7 +116,7 @@ void Layer1Class::setFlag(int packetSize) {
     }
     // we got a packet, set the flag
     _packetSize = packetSize;
-    _receivedFlag = true;
+    _dioFlag = true;
 }
 
 /*Main public functions
@@ -137,7 +141,7 @@ int Layer1Class::init(){
 
 // Transmit polling function
 int Layer1Class::transmit(){
-    BufferEntry entry = txBuffer.read();
+    BufferEntry entry = txBuffer->read();
     if(entry.length != 0){
         sendPacket(entry.data, entry.length);
     }
@@ -147,10 +151,10 @@ int Layer1Class::transmit(){
 // Receive polling function
 int Layer1Class::receive(){
     int ret = 0; 
-    if(_receivedFlag) {
+    if(_dioFlag) {
         Serial.printf("Layer1Class::receive(): _packetSize = %d\r\n", _packetSize);
         _enableInterrupt = false;
-        _receivedFlag = false;
+        _dioFlag = false;
         if (_packetSize > 0){
             char data[MAX_PACKET_SIZE];
             int len = 0;
@@ -161,7 +165,7 @@ int Layer1Class::receive(){
             BufferEntry entry;
             memcpy(&entry.data[0], &data[0], len);
             entry.length = len;
-            rxBuffer.write(entry);
+            rxBuffer->write(entry);
 
             #ifdef LL2_DEBUG
             Serial.printf("Layer1::receive(): data = ");
