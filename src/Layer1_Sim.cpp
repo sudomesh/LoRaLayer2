@@ -1,6 +1,6 @@
-#include <Layer1.h>
-#include <LoRaLayer2.h>
 #ifdef SIM
+#include <Layer1_Sim.h>
+#include <LoRaLayer2.h>
 
 Layer1Class::Layer1Class()
 {
