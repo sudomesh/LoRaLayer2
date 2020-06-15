@@ -2,13 +2,14 @@
 #include <Layer1_Sim.h>
 #include <LoRaLayer2.h>
 
+long _millis = 0;
+
 Layer1Class::Layer1Class()
 {
     _nodeID = 1;
     _transmitting = 0;
     _timeDistortion = 1;
     _spreadingFactor = 9;
-
 }
 
 // 1 second in the simulation == 1 second in real life * timeDistortion
@@ -108,12 +109,17 @@ int Layer1Class::sendPacket(char* data, uint8_t len) {
 }
 
 int Layer1Class::transmit(){
-    Packet packet = LL2.readPacket();
-    if(packet.totalLength > 0){
-        sendPacket((char*)&packet, packet.totalLength);
+    BufferEntry entry = txBuffer->read();
+    if(entry.length > 0){
+        sendPacket(entry.data, entry.length);
     }
-    return packet.totalLength;
+    return entry.length;
 }
 
-Layer1Class Layer1;
+int Layer1Class::receive(){
+    // Simulator receive occurs asynchronously in simulator.c
+    // LL2 must poll Layer1 receive buffer
+    return 1;
+}
+
 #endif

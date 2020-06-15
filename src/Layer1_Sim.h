@@ -10,21 +10,29 @@
 #include <stdio.h>
 #include <string.h> // for memcmp and memset functions
 #include <math.h>  // for ceil and pow functions
+#include <packetBuffer.h>
+
+extern long _millis; // this is a work around to replace arduino's millis() function
 
 class Layer1Class {
 public:
     Layer1Class();
     int simulationTime(int realTime);
     int setTimeDistortion(float newDistortion);
-    int getTime();
-    void setTime(int millis);
+    static int getTime();
+    static void setTime(int millis);
     int spreadingFactor();
     int setNodeID(int newID);
     int nodeID();
 
+    // Fifo buffers
+    packetBuffer *txBuffer;
+    packetBuffer *rxBuffer;
+
     int parse_metadata(char* data, uint8_t len);
     int begin_packet();
     int transmit();
+    int receive();
 
 private:
     int sendPacket(char* data, uint8_t len);
@@ -34,9 +42,7 @@ private:
     int _nodeID;
     float _timeDistortion;
     uint8_t _spreadingFactor;
-    long _millis;
 
 };
 
-extern Layer1Class Layer1;
 #endif

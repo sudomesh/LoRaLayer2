@@ -5,13 +5,13 @@
 #include <stdint.h>
 #include <stdarg.h>
 
-#include <Arduino.h>
-
 #ifdef ARDUINO_LORA
+#include <Arduino.h>
 #include <Layer1_LoRa.h>
 #endif
 
 #ifdef RL_SX1276
+#include <Arduino.h>
 #include <Layer1_SX1276.h>
 #endif
 
