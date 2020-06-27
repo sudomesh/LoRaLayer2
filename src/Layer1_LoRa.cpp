@@ -2,9 +2,9 @@
 #include <Layer1_LoRa.h>
 
 Layer1Class::Layer1Class()
-: _csPin(LORA_CS),
-  _resetPin(LORA_RST),
-  _DIOPin(LORA_IRQ),
+: _csPin(18),
+  _resetPin(23),
+  _DIOPin(26),
   _spreadingFactor(9),
   _loraFrequency(915E6),
   _txPower(17),
