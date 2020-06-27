@@ -1,10 +1,6 @@
 #ifndef LAYER1_H
 #define LAYER1_H
 
-#ifndef RL_SX1276 
-#define RL_SX1276
-#endif
-
 #include <unistd.h>
 #include <stdint.h>
 #include <stdarg.h>
