@@ -10,6 +10,8 @@ Layer1Class::Layer1Class()
     _transmitting = 0;
     _timeDistortion = 1;
     _spreadingFactor = 9;
+    txBuffer = new packetBuffer();
+    rxBuffer = new packetBuffer();
 }
 
 // 1 second in the simulation == 1 second in real life * timeDistortion
