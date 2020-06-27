@@ -1,6 +1,10 @@
 #ifndef LAYER1_H
 #define LAYER1_H
 
+#ifndef SIM
+#define SIM
+#endif
+
 #include <stdint.h>
 
 #define STDIN 0

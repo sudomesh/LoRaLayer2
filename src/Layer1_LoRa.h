@@ -1,6 +1,10 @@
 #ifndef LAYER1_H
 #define LAYER1_H
 
+#ifndef ARDUINO_LORA 
+#define ARDUINO_LORA
+#endif
+
 #include <stdint.h>
 #include <Arduino.h>
 #include <LoRa.h>
