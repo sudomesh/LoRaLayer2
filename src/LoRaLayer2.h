@@ -1,3 +1,9 @@
+#ifndef SIM
+#ifndef RL_SX1276
+#define ARDUINO_LORA
+#endif
+#endif
+
 #ifndef LORALAYER2_H
 #define LORALAYER2_H
 
