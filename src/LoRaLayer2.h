@@ -96,6 +96,7 @@ public:
     Packet readData();
 
     // Print out functions
+    void getLocalAddress(char *out);
     void getNeighborTable(char *out);
     void getRoutingTable(char *out);
     void printPacketInfo(Packet packet);

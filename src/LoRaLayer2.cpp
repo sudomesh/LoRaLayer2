@@ -145,6 +145,13 @@ Packet LL2Class::readData(){
 
 /* Print out functions, for convenience
 */
+void LL2Class::getLocalAddress(char *out){
+    char* buf = out;
+    for(int i = 0 ; i < ADDR_LENGTH ; i++){
+      buf += sprintf(buf, "%02x", _localAddress[i]);
+    }
+}
+
 void LL2Class::getNeighborTable(char *out){
     char* buf = out;
     buf += sprintf(buf, "Neighbor Table:\n");
