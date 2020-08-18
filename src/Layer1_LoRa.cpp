@@ -60,6 +60,18 @@ int Layer1Class::spreadingFactor(){
     return _spreadingFactor;
 }
 
+uint32_t Layer1Class::spiFrequency(){
+    return _spiFrequency;
+}
+
+uint32_t Layer1Class::loraFrequency(){
+    return _loraFrequency;
+}
+
+int Layer1Class::txPower(){
+    return _txPower;
+}
+
 /* User configurable settings
 */
 void Layer1Class::setPins(int cs, int reset, int dio){
@@ -78,10 +90,12 @@ void Layer1Class::setLoRaFrequency(uint32_t frequency){
 
 void Layer1Class::setSpreadingFactor(uint8_t spreadingFactor){
     _spreadingFactor = spreadingFactor;
+    LoRa.setSpreadingFactor(_spreadingFactor); // ranges from 6-12
 }
 
 void Layer1Class::setTxPower(int txPower){
     _txPower = txPower;
+    LoRa.setTxPower(_txPower);
 }
 
 /* Private functions

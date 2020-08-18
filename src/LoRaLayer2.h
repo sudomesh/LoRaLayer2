@@ -99,6 +99,7 @@ public:
     void getLocalAddress(char *out);
     void getNeighborTable(char *out);
     void getRoutingTable(char *out);
+    void getCurrentConfig(char *out);
     void printPacketInfo(Packet packet);
 
     // Main init and loop functions

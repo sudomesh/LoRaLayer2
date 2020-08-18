@@ -181,6 +181,36 @@ void LL2Class::getRoutingTable(char *out){
     }
 }
 
+void LL2Class::getCurrentConfig(char *out){
+    char* buf = out;
+    buf += sprintf(buf, "Current LoRa Config\r\n");
+    buf += sprintf(buf, "Local Addr: ");
+    for(int i = 0 ; i < ADDR_LENGTH ; i++){
+      buf += sprintf(buf, "%02x", _localAddress[i]);
+    }
+    buf += sprintf(buf, "\r\n");
+    buf += sprintf(buf, "Initialzed: %d\r\n", LoRa1->loraInitialized());
+    buf += sprintf(buf, "CS, RST, DIO: %d, %d, %d\r\n", LoRa1->loraCSPin(), LoRa1->resetPin(), LoRa1->DIOPin());
+    buf += sprintf(buf, "SPI Freq: %d\r\n", LoRa1->spiFrequency());
+    buf += sprintf(buf, "LoRa Freq: %d\r\n", LoRa1->loraFrequency());
+    buf += sprintf(buf, "SF: %d\r\n", LoRa1->spreadingFactor());
+    buf += sprintf(buf, "TxPwr: %d\r\n", LoRa1->txPower());
+    /*
+    if(LoRa2){
+      // TODO add LoRa2 config, probably in separate function
+    }
+    */
+    if(_disableRoutingPackets){
+      buf += sprintf(buf, "Routing mode: auto\r\n");
+    }
+    else{
+      buf += sprintf(buf, "Routing mode: not auto\r\n");
+      buf += sprintf(buf, "Routing Interval: %dms\r\n", _routingInterval);
+    }
+    buf += sprintf(buf, "Duty Cycle: %f\r\n", _dutyCycle);
+    // Note, this is close to pushing the limit of 233 bytes in a datagram message
+}
+
 void LL2Class::printPacketInfo(Packet packet){
 
     //TODO: LL2 shouldn't use Serial.printf

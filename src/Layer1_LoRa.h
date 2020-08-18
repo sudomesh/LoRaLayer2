@@ -26,6 +26,9 @@ public:
     int resetPin();
     int DIOPin();
     int spreadingFactor();
+    uint32_t spiFrequency();
+    uint32_t loraFrequency();
+    int txPower();
 
     // User configurable settings
     void setPins(int cs, int reset, int dio);
