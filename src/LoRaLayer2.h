@@ -90,6 +90,7 @@ public:
     void setLocalAddress(const char* macString);
     long setInterval(long interval);
     void setDutyCycle(double dutyCycle);
+    int setTxPower(int txPower, int loraMod);
 
     // Layer 3 tx/rx wrappers
     int writeData(Datagram datagram, size_t length);

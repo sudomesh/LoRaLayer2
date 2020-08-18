@@ -98,6 +98,19 @@ void LL2Class::setDutyCycle(double dutyCycle){
     _dutyCycle = dutyCycle;
 }
 
+int LL2Class::setTxPower(int txPower, int loraMod){
+    if(loraMod == 1){
+        LoRa1->setTxPower(txPower);
+    }
+    else if(loraMod == 2){
+        LoRa2->setTxPower(txPower);
+    }
+    else{
+        return 0;
+    }
+    return loraMod;
+}
+
 /* private wrappers for packetBuffers
 */
 int LL2Class::writeToBuffer(packetBuffer *buffer, Packet packet){
