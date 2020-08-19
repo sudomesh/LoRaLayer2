@@ -99,6 +99,7 @@ void LL2Class::setDutyCycle(double dutyCycle){
 }
 
 int LL2Class::setTxPower(int txPower, int loraMod){
+#ifdef ARDUINO_LORA
     if(loraMod == 1){
         LoRa1->setTxPower(txPower);
     }
@@ -109,6 +110,10 @@ int LL2Class::setTxPower(int txPower, int loraMod){
         return 0;
     }
     return loraMod;
+#endif
+#ifdef RL_SX1276
+    return 0;
+#endif
 }
 
 /* private wrappers for packetBuffers
@@ -196,6 +201,7 @@ void LL2Class::getRoutingTable(char *out){
 
 void LL2Class::getCurrentConfig(char *out){
     char* buf = out;
+#ifdef ARDUINO_LORA
     buf += sprintf(buf, "Current LoRa Config\r\n");
     buf += sprintf(buf, "Local Addr: ");
     for(int i = 0 ; i < ADDR_LENGTH ; i++){
@@ -222,6 +228,10 @@ void LL2Class::getCurrentConfig(char *out){
     }
     buf += sprintf(buf, "Duty Cycle: %f\r\n", _dutyCycle);
     // Note, this is close to pushing the limit of 233 bytes in a datagram message
+#endif
+#ifdef RL_SX1276
+    buf += sprintf(buf, "getCurrentConfig not yet supported for RadioLib\r\n");
+#endif
 }
 
 void LL2Class::printPacketInfo(Packet packet){
