@@ -116,6 +116,21 @@ int LL2Class::setTxPower(int txPower, int loraMod){
 #endif
 }
 
+int LL2Class::setSpreadingFactor(int spreadFactor, int loraMod){
+#ifdef ARDUINO_LORA
+    if(loraMod == 1){
+        LoRa1->setSpreadingFactor(spreadFactor);
+    }
+    else{
+        return 0;
+    }
+    return loraMod;
+#endif
+#ifdef RL_SX1276
+    return 0;
+#endif
+}
+
 /* private wrappers for packetBuffers
 */
 int LL2Class::writeToBuffer(packetBuffer *buffer, Packet packet){

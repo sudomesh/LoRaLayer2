@@ -91,6 +91,7 @@ public:
     long setInterval(long interval);
     void setDutyCycle(double dutyCycle);
     int setTxPower(int txPower, int loraMod);
+    int setSpreadingFactor(int spreadFactor, int loraMod);
 
     // Layer 3 tx/rx wrappers
     int writeData(Datagram datagram, size_t length);
