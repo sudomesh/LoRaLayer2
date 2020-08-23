@@ -150,7 +150,7 @@ private:
     int _neighborEntry;
     int _routeEntry;
     int _routingInterval;
-    int _disableRoutingPackets;
+    //int _disableRoutingPackets;
     int _dutyInterval;
     double _dutyCycle;
 

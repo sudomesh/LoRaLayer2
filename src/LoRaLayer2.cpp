@@ -14,7 +14,7 @@ LL2Class::LL2Class(Layer1Class *lora_1, Layer1Class *lora_2)
     _neighborEntry(0),
     _routeEntry(0),
     _routingInterval(15000),
-    _disableRoutingPackets(0),
+    //_enableRoutingPackets(1),
     _dutyInterval(0),
     _dutyCycle(.1)
 {
@@ -85,12 +85,14 @@ void LL2Class::setLocalAddress(const char* macString){
 }
 
 long LL2Class::setInterval(long interval){
+    /*
     if(interval == 0){
-        _disableRoutingPackets = 1;
+        _enableRoutingPackets = 0;
     }else{
-        _disableRoutingPackets = 0;
-        _routingInterval = interval;
+        _enableRoutingPackets = 1;
     }
+    */
+    _routingInterval = interval;
     return _routingInterval;
 }
 
@@ -223,7 +225,7 @@ void LL2Class::getCurrentConfig(char *out){
       buf += sprintf(buf, "%02x", _localAddress[i]);
     }
     buf += sprintf(buf, "\r\n");
-    buf += sprintf(buf, "Initialzed: %d\r\n", LoRa1->loraInitialized());
+    buf += sprintf(buf, "Initialized: %d\r\n", LoRa1->loraInitialized());
     buf += sprintf(buf, "CS, RST, DIO: %d, %d, %d\r\n", LoRa1->loraCSPin(), LoRa1->resetPin(), LoRa1->DIOPin());
     buf += sprintf(buf, "SPI Freq: %d\r\n", LoRa1->spiFrequency());
     buf += sprintf(buf, "LoRa Freq: %d\r\n", LoRa1->loraFrequency());
@@ -234,12 +236,12 @@ void LL2Class::getCurrentConfig(char *out){
       // TODO add LoRa2 config, probably in separate function
     }
     */
-    if(_disableRoutingPackets){
+    if(_routingInterval > 0){
       buf += sprintf(buf, "Routing mode: auto\r\n");
+      buf += sprintf(buf, "Routing interval: %dms\r\n", _routingInterval);
     }
     else{
-      buf += sprintf(buf, "Routing mode: not auto\r\n");
-      buf += sprintf(buf, "Routing Interval: %dms\r\n", _routingInterval);
+      buf += sprintf(buf, "Routing mode: manual\r\n");
     }
     buf += sprintf(buf, "Duty Cycle: %f\r\n", _dutyCycle);
     // Note, this is close to pushing the limit of 233 bytes in a datagram message
@@ -643,7 +645,7 @@ int LL2Class::init(){
 int LL2Class::daemon(){
     int ret = -1;
     // try adding a routing packet to L2toL1 buffer, if interval is up and routing is enabled
-    if (Layer1Class::getTime() - _lastRoutingTime > _routingInterval && _disableRoutingPackets == 0) {
+    if (Layer1Class::getTime() - _lastRoutingTime > _routingInterval && _routingInterval > 0) {
         Packet routingPacket = buildRoutingPacket();
         // need to init with broadcast addr and then loop through routing table to build routing table
         ret = writeToBuffer(LoRa1->txBuffer, routingPacket);
