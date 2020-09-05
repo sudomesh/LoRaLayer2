@@ -28,10 +28,11 @@
 #include <packetBuffer.h>
 
 //#define DEBUG 0
+#define PACKET_LENGTH 256 // max packet size for LoRa transmissions
 #define HEADER_LENGTH 17
-#define PACKET_LENGTH 256
-#define DATA_LENGTH 241
-#define MESSAGE_LENGTH 233
+#define DATAGRAM_LENGTH 239 // max datagram size = 256 - 17
+#define DATAGRAM_HEADER 5
+#define MESSAGE_LENGTH 234 // max message size = 239 - 5
 #define SHA1_LENGTH 40
 #define ADDR_LENGTH 4
 #define MAX_ROUTES_PER_PACKET 40 

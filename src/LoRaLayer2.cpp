@@ -293,7 +293,7 @@ Packet LL2Class::buildPacket(uint8_t ttl, uint8_t nextHop[ADDR_LENGTH], uint8_t 
 }
 
 Packet LL2Class::buildRoutingPacket(){
-    uint8_t data[DATA_LENGTH];
+    uint8_t data[DATAGRAM_LENGTH];
     int dataLength = 0;
     int routesPerPacket = _routeEntry;
     if (_routeEntry >= MAX_ROUTES_PER_PACKET-1){
