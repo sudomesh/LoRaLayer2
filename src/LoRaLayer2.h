@@ -122,8 +122,7 @@ private:
     // Routing utility functions
     Packet buildPacket(uint8_t ttl, uint8_t nextHop[ADDR_LENGTH], uint8_t source[ADDR_LENGTH], uint8_t hopCount, uint8_t metric, Datagram datagram, size_t length);
     Packet buildRoutingPacket();
-    uint8_t calculatePacketLoss(int entry, uint8_t sequence);
-    uint8_t calculateMetric(int entry);
+    uint8_t calculatePacketSuccess(int entry, uint8_t sequence);
     int checkNeighborTable(NeighborTableEntry neighbor);
     int checkRoutingTable(RoutingTableEntry route);
     int updateNeighborTable(NeighborTableEntry neighbor, int entry);

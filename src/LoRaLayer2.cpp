@@ -19,6 +19,8 @@ LL2Class::LL2Class(Layer1Class *lora_1, Layer1Class *lora_2)
     _dutyCycle(.1)
 {
   rxBuffer = new packetBuffer;
+  memset(_neighborTable, 0, sizeof(_neighborTable));
+  memset(_routeTable, 0, sizeof(_routeTable));
 };
 
 /* Public access to local variables
@@ -326,37 +328,58 @@ double calculateAirtime(double length, double spreadingFactor, double explicitHe
     return timePerPayload;
 }
 
-uint8_t LL2Class::calculatePacketLoss(int entry, uint8_t sequence){
-    uint8_t packet_loss = 0xFF;
-    uint8_t sequence_diff = sequence - _neighborTable[entry].lastReceived;
-    if(sequence_diff == 0){
-        // this is first packet received from neighbor
-        // assume perfect packet success
-        _neighborTable[entry].packet_success = 0xFF;
-        packet_loss = 0x00; 
-    }else if(sequence_diff == 1){
-        // do not decrease packet success rate
-        packet_loss = 0x00; 
-    }else if(sequence_diff > 1 && sequence_diff < 16){
-        // decrease packet success rate by difference
-        packet_loss = 0x10 * sequence_diff; 
-    }
-    // no packet received recently
-    // assume complete packet loss
-    return packet_loss;
-}
+uint8_t LL2Class::calculatePacketSuccess(int entry, uint8_t sequence){
+    uint8_t sequence_diff = 0;
+    uint8_t newSuccess = 0x00;
+    uint8_t previousSuccess = _neighborTable[entry].packet_success >> 4;
+    uint8_t previousSequence = _neighborTable[entry].lastReceived;
 
-uint8_t LL2Class::calculateMetric(int entry){
-    // other metric values could be introduced here, currently only packet success is considered
-    float weightedPacketSuccess =  ((float) _neighborTable[entry].packet_success)*_packetSuccessWeight;
-    uint8_t metric = weightedPacketSuccess;
-    return metric;
+    if (sequence > previousSequence){
+        // sequence number is incrementing as expected
+        sequence_diff = sequence - previousSequence;
+    }
+    else if (sequence < previousSequence){
+        // sequence number has wrapped around or restarted
+        sequence_diff = (256-previousSequence) + sequence;
+    }
+    if (sequence == previousSequence){
+        // this should only happen when a route is new,
+        // if it happens during normal opertaion something is wrong,
+        // packet success will be kept at zero
+        sequence_diff = 0;
+    }
+
+    if (sequence_diff == 1){
+        // packets received in sequence
+        if (previousSuccess < 0x0F){
+            // increment packet success if not already at max
+            newSuccess =  previousSuccess + 0x01;
+        }
+        else{
+            // keep packet success at max
+            newSuccess = 0x0F;
+        }
+    }
+    else if (sequence_diff != 0){
+        if (previousSuccess > 0x01*(sequence_diff-1)){
+            // packets have been lost within acceptable bound
+            // decrease packet success by a factor of the number of packets lost
+            newSuccess = previousSuccess - 0x01*(sequence_diff-1);
+        }
+        // else too many packets have been lost, keep packet success set to zero
+    }
+
+    if (newSuccess != 0){
+        // shift packet success into most significant byte
+        // and fill least significant byte with F
+        newSuccess = (newSuccess << 4) | 0x0F;
+    }
+    return newSuccess;
 }
 
 int LL2Class::checkNeighborTable(NeighborTableEntry neighbor){
     int entry = _neighborEntry;
     for( int i = 0 ; i < _neighborEntry ; i++){
-        //had to use memcmp instead of strcmp?
         if(memcmp(neighbor.address, _neighborTable[i].address, sizeof(neighbor.address)) == 0){
             entry = i; 
         }
@@ -403,7 +426,7 @@ int LL2Class::checkRoutingTable(RoutingTableEntry route){
 
 int LL2Class::updateNeighborTable(NeighborTableEntry neighbor, int entry){
     // copy neighbor into specified entry in neighbor table
-    memcpy(&_neighborTable[entry], &neighbor, sizeof(_neighborTable[entry]));
+    memcpy(&_neighborTable[entry], &neighbor, sizeof(NeighborTableEntry));
     if(entry == _neighborEntry){
         // if specified entry is the same as current count of neighbors
         // this is a new neighbor, increment neighbor count
@@ -415,7 +438,7 @@ int LL2Class::updateNeighborTable(NeighborTableEntry neighbor, int entry){
 
 int LL2Class::updateRouteTable(RoutingTableEntry route, int entry){
     // copy route into specified entry in routing table
-    memcpy(&_routeTable[entry], &route, sizeof(_routeTable[entry]));
+    memcpy(&_routeTable[entry], &route, sizeof(RoutingTableEntry));
     if(entry == _routeEntry){
         // if specified entry is the same as current count of routes
         // this is a new route, increment route count
@@ -438,14 +461,14 @@ int LL2Class::selectRoute(uint8_t destination[ADDR_LENGTH]){
 int LL2Class::parseNeighbor(Packet packet){
     // Create neighbor table entry with sender address
     NeighborTableEntry neighbor;
-    memcpy(neighbor.address, packet.sender, sizeof(neighbor.address));
+    memcpy(neighbor.address, packet.sender, ADDR_LENGTH);
     // Find neighbor table entry for sender
     int n_entry = checkNeighborTable(neighbor);
     // Calculate packet loss to find metric of link
-    uint8_t packet_loss = calculatePacketLoss(n_entry, packet.sequence);
-    neighbor.packet_success = _neighborTable[n_entry].packet_success - packet_loss;
+    neighbor.packet_success = calculatePacketSuccess(n_entry, packet.sequence);
     neighbor.lastReceived = packet.sequence;
-    neighbor.metric = calculateMetric(n_entry);
+    float weightedPacketSuccess =  ((float) neighbor.packet_success)*_packetSuccessWeight;
+    neighbor.metric = (uint8_t) weightedPacketSuccess;
     // update neighbor table with neighbor entry
     updateNeighborTable(neighbor, n_entry);  
     // update routing table with neighbor entry also
