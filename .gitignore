@@ -1,3 +1,5 @@
 examples/.pio
 examples/lib
+examples/sender/lib
+examples/receiver/lib
 .vscode/
