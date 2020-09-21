@@ -19,10 +19,10 @@
 #define LED 25
 #define TX_POWER 20
 
-char MAC[9] = "c0d3f00d";
-uint8_t LOCAL_ADDRESS[ADDR_LENGTH] = {0xc0, 0xd3, 0xf0, 0x0d};
+char MAC[9] = "c0d3cafe";
+uint8_t LOCAL_ADDRESS[ADDR_LENGTH] = {0xc0, 0xd3, 0xca, 0xfe};
 // GATEWAY is the receiver 
-uint8_t GATEWAY[ADDR_LENGTH] = {0xc0, 0xd3, 0xf0, 0x0c};
+uint8_t SENDER[ADDR_LENGTH] = {0xc0, 0xd3, 0xf0, 0x0d};
 
 Layer1Class *Layer1;
 LL2Class *LL2;
