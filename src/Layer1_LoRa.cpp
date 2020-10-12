@@ -166,7 +166,9 @@ int Layer1Class::transmit(){
 int Layer1Class::receive(){
     int ret = 0; 
     if(_dioFlag) {
+        #ifdef LL2_DEBUG
         Serial.printf("Layer1Class::receive(): _packetSize = %d\r\n", _packetSize);
+        #endif
         _enableInterrupt = false;
         _dioFlag = false;
         if (_packetSize > 0){
