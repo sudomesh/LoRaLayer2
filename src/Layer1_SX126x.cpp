@@ -1,5 +1,5 @@
 #ifdef RL_SX1262
-#include <Layer1_SX1262.h>
+#include <Layer1_SX126x.h>
 
 Layer1Class::Layer1Class(SX1262 *lora, int mode, int cs, int reset, int dio, uint8_t sf, uint32_t frequency, int power) 
 : _LoRa(lora),
@@ -15,9 +15,11 @@ Layer1Class::Layer1Class(SX1262 *lora, int mode, int cs, int reset, int dio, uin
   _bandwidth(125.0), 
   _codingRate(5),
   _syncWord(SX126X_SYNC_WORD_PRIVATE), 
-  _currentLimit(100),
+  _currentLimit(60),
   _preambleLength(8),
   _gain(0)
+  _txcoVoltage(0);
+  _useRegulatorLDO(false);
 {
   txBuffer = new packetBuffer();
   rxBuffer = new packetBuffer();

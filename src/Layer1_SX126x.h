@@ -50,7 +50,8 @@ private:
     uint8_t _syncWord; //SX126X_SYNC_WORD_PRIVATE, 
     uint8_t _currentLimit;
     uint8_t _preambleLength;
-    uint8_t _gain;
+    uint8_t _txcoVoltage;
+    bool _useRegulatorLDO;
 };
 
 #endif
