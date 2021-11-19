@@ -1,7 +1,6 @@
 #ifdef RL_SX1262
 #include <Layer1_SX126x.h>
-
-Layer1Class::Layer1Class(SX1262 *lora, int mode, int cs, int reset, int dio, uint8_t sf, uint32_t frequency, int power) 
+Layer1Class::Layer1Class(SX1262 *lora, int mode, int cs, int reset, int dio, uint8_t sf, uint32_t frequency, int power)
 : _LoRa(lora),
   _mode(mode),
   _csPin(cs),
@@ -17,14 +16,12 @@ Layer1Class::Layer1Class(SX1262 *lora, int mode, int cs, int reset, int dio, uin
   _syncWord(SX126X_SYNC_WORD_PRIVATE), 
   _currentLimit(60),
   _preambleLength(8),
-  _gain(0)
-  _txcoVoltage(0);
-  _useRegulatorLDO(false);
+  _txcoVoltage(0),
+  _useRegulatorLDO(false)
 {
   txBuffer = new packetBuffer();
   rxBuffer = new packetBuffer();
 };
-
 bool _dioFlag = false;
 bool _transmitFlag = false;
 bool _enableInterrupt = true;
@@ -87,7 +84,7 @@ void Layer1Class::setFlag(void) {
 // Initialization
 int Layer1Class::init(){
 
-    int state = _LoRa->begin(_loraFrequency, _bandwidth, _spreadingFactor, _codingRate, SX126X_SYNC_WORD_PRIVATE, _txPower, _currentLimit, _preambleLength, _gain); 
+    int state = _LoRa->begin(_loraFrequency, _bandwidth, _spreadingFactor, _codingRate, SX126X_SYNC_WORD_PRIVATE, _txPower, _currentLimit, _preambleLength, _txcoVoltage, _useRegulatorLDO); 
     #ifdef LL2_DEBUG
     Serial.printf("Layer1::init(): state = %d\r\n", state);
     #endif
