@@ -92,7 +92,7 @@ int Layer1Class::init(){
       return _loraInitialized;
     }
 
-    _LoRa->setDio0Action(Layer1Class::setFlag);
+    _LoRa->setDio1Action(Layer1Class::setFlag);
 
     state = _LoRa->startReceive();
     if (state != ERR_NONE) {

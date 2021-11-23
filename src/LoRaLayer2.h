@@ -21,6 +21,11 @@
 #include <Layer1_SX1276.h>
 #endif
 
+#ifdef RL_SX1262
+#include <Arduino.h>
+#include <Layer1_SX126x.h>
+#endif
+
 #ifdef SIM
 #include <Layer1_Sim.h>
 #endif
