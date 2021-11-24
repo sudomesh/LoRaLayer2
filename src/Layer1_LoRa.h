@@ -1,6 +1,8 @@
 #ifndef SIM
 #ifndef RL_SX1276
+#ifndef RL_SX1262
 #define ARDUINO_LORA
+#endif
 #endif
 #endif
 
