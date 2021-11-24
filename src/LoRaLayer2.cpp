@@ -1,5 +1,9 @@
 #include <LoRaLayer2.h>
 
+#if defined ( RL_SX1276 ) || defined ( RL_SX1262 )
+#undef ARDUINO_LORA
+#endif
+
 uint8_t BROADCAST[ADDR_LENGTH] = {0xff, 0xff, 0xff, 0xff}; 
 uint8_t LOOPBACK[ADDR_LENGTH] = {0x00, 0x00, 0x00, 0x00}; 
 uint8_t ROUTING[ADDR_LENGTH] = {0xaf, 0xff, 0xff, 0xff}; 
@@ -248,7 +252,7 @@ void LL2Class::getCurrentConfig(char *out){
     buf += sprintf(buf, "Duty Cycle: %f\r\n", _dutyCycle);
     // Note, this is close to pushing the limit of 233 bytes in a datagram message
 #endif
-#ifdef RL_SX1276
+#if defined ( RL_SX1276 ) || defined ( RL_SX1262 )
     buf += sprintf(buf, "getCurrentConfig not yet supported for RadioLib\r\n");
 #endif
 }
