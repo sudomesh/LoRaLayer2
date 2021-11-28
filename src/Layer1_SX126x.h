@@ -1,43 +1,24 @@
-#ifndef SIM
-#ifndef RL_SX1276
-#ifndef RL_SX1262
-#define ARDUINO_LORA
-#endif
-#endif
-#endif
-
 #ifndef LAYER1_H
 #define LAYER1_H
 
+#include <unistd.h>
 #include <stdint.h>
+#include <stdarg.h>
+
 #include <Arduino.h>
-#include <LoRa.h>
+#include <RadioLib.h>
 #include <SPI.h>
+
 #include <packetBuffer.h>
 
 class Layer1Class {
+
 public:
-    Layer1Class();
-
-    int debug_printf(const char* format, ...);
-
+    Layer1Class(SX1262 *lora, int mode, int cs, int reset, int dio, uint8_t sf = 9, uint32_t frequency = 915, int power = 17); 
+    
     // Public access to local variables
     static int getTime();
-    int loraInitialized();
-    int loraCSPin();
-    int resetPin();
-    int DIOPin();
     int spreadingFactor();
-    uint32_t spiFrequency();
-    uint32_t loraFrequency();
-    int txPower();
-
-    // User configurable settings
-    void setPins(int cs, int reset, int dio);
-    void setSPIFrequency(uint32_t frequency);
-    void setLoRaFrequency(uint32_t frequency);
-    void setSpreadingFactor(uint8_t spreadingFactor);
-    void setTxPower(int txPower);
 
     // Fifo buffers
     packetBuffer *txBuffer;
@@ -50,10 +31,12 @@ public:
 
 private:
     // Main private functions
-    static void setFlag(int packetSize);
+    static void setFlag(void);
     int sendPacket(char *data, size_t len);
 
     // Local variables
+    SX1262 *_LoRa;
+    int _mode;
     int _csPin;
     int _resetPin;
     int _DIOPin;
@@ -62,5 +45,13 @@ private:
     int _txPower;
     int _loraInitialized;
     uint32_t _spiFrequency;
+    float _bandwidth; 
+    uint8_t _codingRate;
+    uint8_t _syncWord; //SX126X_SYNC_WORD_PRIVATE, 
+    uint8_t _currentLimit;
+    uint8_t _preambleLength;
+    uint8_t _txcoVoltage;
+    bool _useRegulatorLDO;
 };
+
 #endif
